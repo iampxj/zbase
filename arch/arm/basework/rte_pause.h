@@ -9,7 +9,7 @@
 #include CONFIG_HEADER_FILE
 #endif
 
-#ifndef RTE_USE_C11_MEM_MODEL
+#ifndef CONFIG_C11_MEM_MODEL
 #include "basework/arch/generic/rte_pause.h"
 #endif
 

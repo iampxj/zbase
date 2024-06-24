@@ -296,7 +296,7 @@ __rte_ring_dequeue_elems(struct rte_ring *r, uint32_t cons_head,
  * 2.use one-direction load_acquire/store_release barrier
  * It depends on performance test results.
  */
-#ifdef RTE_USE_C11_MEM_MODEL
+#ifdef CONFIG_C11_MEM_MODEL
 #include "basework/container/ring/rte_ring_c11_pvt.h"
 #else
 #include "basework/container/ring/rte_ring_generic_pvt.h"
