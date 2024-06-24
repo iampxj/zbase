@@ -127,7 +127,7 @@ STATIC_INLINE void *alloc_cache_buffer(struct lazy_cache *cache, size_t size,
 
 #ifdef CONFIG_LVGL_LAZYDECOMP_AUXMEM 
 	pool = &cache->aux_mempool;
-	if (pool->endptr - pool->freeptr >= size) {
+	if (pool->area && pool->endptr - pool->freeptr >= size) {
 		*phead = (void **)&pool->freeptr;
 		p = pool->freeptr;
 		pool->freeptr = ALIGNED_UP_ADD(pool->freeptr, size, CACHE_ALIGNED);

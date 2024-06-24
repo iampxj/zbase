@@ -13,7 +13,7 @@ extern "C"{
 #define FIFO_FILE_STRUCT_SIZE sizeof(struct fifo_filemem)
 
 struct fifo_filemem {
-    char buffer[sizeof(void *) == 8? 56: 32];
+    char buffer[sizeof(void *) == 8? 64: 32];
 };
 
 int fifofs_register(struct fifo_filemem fds[], size_t n);

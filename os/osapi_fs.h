@@ -18,23 +18,27 @@
 #include <stdarg.h>
 #include <sys/types.h>
 
-#include "basework/generic.h"
-#include "basework/container/queue.h"
-#include "basework/os/osapi_obj.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include "basework/generic.h"
+#include "basework/container/queue.h"
+#include "basework/os/osapi_obj.h"
 
 #ifdef _MSC_VER
 #define __ssize_t_defined
 typedef long int ssize_t;
 
-#undef  rte_unlikely
-#define rte_unlikely(x) (x)
-#define VFS_STATIC_INLINE static inline
+# undef  rte_unlikely
+# define rte_unlikely(x) (x)
+
+# define VFS_STATIC_INLINE static inline
 #else /* !_MSC_VER */
-#define VFS_STATIC_INLINE static __rte_always_inline
+# ifdef __cplusplus
+#  define rte_unlikely(x) __builtin_expect(!!(x), 0)
+# endif /* __cplusplus */
+# define VFS_STATIC_INLINE static __rte_always_inline
 #endif /* _MSC_VER */
 
 #ifndef MAX_FILE_NAME

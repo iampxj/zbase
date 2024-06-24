@@ -17,13 +17,14 @@ if (NOT WINDOWS)
         #${CMAKE_CURRENT_SOURCE_DIR}/ota_fstream_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/msg_storage_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/async_call_test.cc
-        ${CMAKE_CURRENT_SOURCE_DIR}/ptfs_test.cc
+        # ${CMAKE_CURRENT_SOURCE_DIR}/ptfs_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/pagefs_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/xipfs_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/lua_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/rb_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/ahash_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/circlebuf_test.cc
+        ${CMAKE_CURRENT_SOURCE_DIR}/fifofs_test.cc
     )
 endif()
 
