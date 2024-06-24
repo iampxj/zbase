@@ -1,0 +1,119 @@
+
+menu "Block Device"
+
+config DISK_SAFEAPI
+    bool "Enable disk-operation API safe-checker"
+    default y
+
+config BLKDEV_LITE
+    bool "The block device for small footpoint memory"
+    default n
+
+config BLKDEV_ERASE_BLKSZ
+    int "The block device eraseable size"
+    depends on BLKDEV_LITE
+    default 4096
+
+config BLKDEV_WRSIZE
+    int "The write block size"
+    depends on BLKDEV_LITE
+    default 256
+    help
+        This option is used to reduce data size that 
+        write into flash device
+
+if !BLKDEV_LITE
+config BLKDEV_NR_BUFS
+    int "The block device buffer numbers"
+    range 1 20
+    default 4
+
+config BLKDEV_MAX_BLKSZ
+    int "The maximum block size for block device"
+    default 4096
+
+config BLKDEV_SWAP_PERIOD
+    int "Block device sync period with milliseconds"
+    default 3000
+
+config BLKDEV_HOLD_TIME
+    int "Block device data hold time with millisecond"
+    default 10000
+endif #BLKDEV_LITE
+
+menuconfig PTFS
+    bool "filesystem based parition table"
+    default n
+    help
+      This is simple filesystem that partiton based and
+      just only design for large file read/write 
+     
+if PTFS
+config PTFS_SIZE
+    int "File parition size"
+    default 3145728
+
+config PTFS_INODE_SIZE
+    int "File index space size"
+    default 4096
+
+config PTFS_BLKSIZE
+    int "File partition block size"
+    default 65536
+
+config PTFS_MAXFILES
+    int "Maximum files"
+    default 6
+
+endif #PTFS
+
+menuconfig XIPFS
+    bool "Enable xip filesystem"
+    default n
+    help
+        This option is enable xip filesystem that can make
+        sure the file content is continuity
+     
+if XIPFS
+config XIPFS_SIZE
+    int "File parition size"
+    default 3145728
+
+config XIPFS_BLKSIZE
+    int "File partition block size"
+    default 32768
+
+config XIPFS_MAXFILES
+    int "Maximum files"
+    default 15
+
+endif #XIPFS
+
+menuconfig CUSTOM_PT_TABLE
+    bool "Enable custom partition table"
+    default n
+
+if CUSTOM_PT_TABLE
+
+config MAJOR_PT_FILE
+    string "The major partition configuration file"
+    default "config/major_ptcfg_default.h"
+
+config MINOR_PT_FILE
+    string "The minor partition configuration file"
+    default "config/minor_ptcfg_default.h"
+
+config MINOR_PT2_FILE
+    string "The minor partition configuration file 2"
+    default "config/minor_ptcfg2_default.h"
+    help
+      This partition can not be erased when the system 
+      reset factory settings
+
+endif #CUSTOM_PT_TABLE
+
+config FIFOFS_CHECKER_DISABLE
+    bool "Disable fifofs parameter checker"
+    default y
+    
+endmenu

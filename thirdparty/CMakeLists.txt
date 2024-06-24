@@ -1,0 +1,3 @@
+add_subdirectory_ifdef(CONFIG_GTEST googletest)
+add_subdirectory_ifdef(CONFIG_JSON_PARSER cJSON)
+add_subdirectory_ifdef(CONFIG_LUA lua)

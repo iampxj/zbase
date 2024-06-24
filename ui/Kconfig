@@ -1,0 +1,20 @@
+menuconfig BASEWORK_UI
+    bool "Basework UI compoment"
+    default n
+
+if BASEWORK_UI
+
+config LVGL_ENCODER
+    bool "Enable encoder intput device for lvgl"
+    default n
+	
+config LVGL_LAZY_DECOMP
+	bool "Enable picture resource lazy decompress"
+	default n
+
+config LVGL_LAZYDECOMP_AUXMEM
+	bool "Enable aux memory pool for lazy-cache controller"
+	depends on LVGL_LAZY_DECOMP
+	default n
+
+endif #BASEWORK_UI

@@ -1,0 +1,45 @@
+menu "Thirdparty Library"
+
+menuconfig LUA
+    bool "Enable lua VM"
+    default n
+    help
+        This option is enable lua script interpreter
+
+if LUA
+config LUA_PACKAGE
+    bool "Enable package"
+    default n
+
+config LUA_COROUTINE
+    bool "Enable coroutine"
+    default n
+
+config LUA_TABLE
+    bool "Enable table"
+    default n
+
+config LUA_IO
+    bool "Enable standard IO"
+    default n
+
+config LUA_OS
+    bool "Enable os library support"
+    default n
+    
+config LUA_MATH
+    bool "Enable math library"
+    default n
+
+config LUA_UTF8
+    bool "Enable UTF8 code"
+    default n
+
+config LUA_DEBUG
+    bool "Enable debug information"
+    default n
+
+endif #LUA
+
+
+endmenu

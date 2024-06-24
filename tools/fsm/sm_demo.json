@@ -1,0 +1,45 @@
+{
+    "name": "demo",
+    "init": "S0",
+    "action": [
+        {
+            "name": "ON"
+        },
+        {
+            "name": "OFF"
+        }
+    ],
+    
+    "machine" : {
+        "P0": [
+            {
+                "state": "P0",
+                "entry": "pr_info(\"Entry P0\");",
+                "exit" : "pr_info(\"Exit P0\");"
+            },
+            {
+                "state": "S0",
+                "run"  : "pr_info(\"S0\");",
+                "entry": "pr_info(\"Entry\");",
+                "exit" : "pr_info(\"Exit\");"
+            },
+            {
+                "state": "S1"
+            },
+            {
+                "state": "S2"
+            }
+        ],
+        "P1": [
+            {
+                "state": "S4"
+            },
+            {
+                "state": "S5"
+            },
+            {
+                "state": "S6"
+            }
+        ]
+    }
+}

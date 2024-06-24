@@ -1,0 +1,36 @@
+
+menu "Operation System Abstract Layer"
+
+menuconfig PTFILE_MOUNT_TABLE
+    bool "Enable partition filesystem mount table"
+    default n
+
+if PTFILE_MOUNT_TABLE
+config PTFILE_MOUNT_HEADER
+    string "The header file of partition mount data"
+    default "xxxx.h"
+endif
+
+config OS_MAX_TIMERS
+    int "The maximum timers"
+    default 30
+    help
+        This option is limit maximum timers that can be created
+        at the same time
+
+config OS_MAX_FILES
+    int "The maximum files"
+    default 10
+    help
+        This option is limit maximu files that can be opend at
+        the same time
+
+config OS_TIMER_TRACER
+    bool "Enable timer tracer"
+    default n
+
+config VFS_PARAM_CHECKER_DISABLE
+    bool "Disable parameter checker"
+    default y
+        
+endmenu

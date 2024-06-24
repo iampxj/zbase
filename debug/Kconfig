@@ -1,0 +1,26 @@
+menu "System debug"
+
+menuconfig KASAN
+    bool "Enable address sanitizer"
+    default n
+
+if KASAN
+config ASAN_SHADOW_SECTION
+    string "The section of Shadow area"
+    default ".bss.shadow.mem"
+
+config ASAN_REDZONE_SIZE
+    int "The size of red-zone"
+    default 8
+
+config ASAN_MEM_BASE
+    hex "The starting address to be protected"
+    default 0
+
+config ASAN_MEM_SIZE
+    hex "The size of protected area"
+    default 0x10000
+
+endif  #KASAN
+
+endmenu

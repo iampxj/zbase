@@ -1,0 +1,113 @@
+menuconfig BASEWORK
+    bool "Low level Base library"
+    default y
+
+if BASEWORK
+
+rsource "os/Kconfig"
+
+config HFSM_SUPPORT
+    bool "Enable hierarchical support for FSM"
+    default n
+
+config SMALL_MEM_MODEL
+    bool "Enable small memory model"
+    default n
+
+config ENCODER_INPUT_FRAMEWORK
+    bool "Enable encoder input framework"
+    default y
+
+config BACKUP_RAM_SIZE
+    int "The size nvram of system"
+    default 5120
+
+config USER_PARTITION
+    bool "Enable user partitions"
+    default y
+
+config CORTEXM_DWT
+    bool "Enable watchpoint for cortexm cpu"
+
+config FTRACE
+    bool "Enable function trace"
+
+config PERFORMANCE_PROFILE
+    bool "Enable function performance profile"
+    depends on FTRACE
+
+config FRACE_NVRAM
+    bool "Enable nvram buffer for function trace"
+    depends on FTRACE
+    default n
+
+config BASEWORK_MEM_SIZE
+    int "The memory pool size of general allocator"
+    default 65536
+
+config GTEST
+    bool "The google code test framework"
+    select CPLUSPLUS
+    select LIB_CPLUSPLUS
+    select POSIX_API
+    select PTHREAD_IPC
+
+config BASEWORK_TEST
+    bool "Enable test case for basework"
+    depends on GTEST
+    default n
+
+config BASEWORK_RQ_PRIORITY
+    int "Run queue task priority"
+    range 0 15
+    default 7
+
+config BASEWORK_RQ_STACK_SIZE
+    int "Run queue task stack size"
+    range 1000 16384
+    default 4096
+
+config BASEWORK_RQ_CAPACITY
+    int "The maximum node numbers of run-queue"
+    default 200
+
+config MAX_MESSAGES
+    int "The maximum limit for messages"
+    default 30
+
+config MAX_MESSAGE_TYPES
+    int "The maximum limit for message types"
+    default 50
+
+rsource "package/Kconfig"
+rsource "dev/Kconfig"
+rsource "drive/Kconfig"
+rsource "ui/Kconfig"
+rsource "lib/Kconfig"
+
+menuconfig BASEWORK_TOOLS
+    bool "Debugging Tools"
+    default n
+
+if BASEWORK_TOOLS
+config FLASHTRACE
+    bool "Trace flash operation"
+    default n
+
+config FLASHTRACE_LOGSZ
+    int "Hash pool log size"
+    depends on FLASHTRACE
+    default 8
+
+config FLASHTRACE_ELEMNUMS
+    int "Hash node numbers"
+    depends on FLASHTRACE
+    default 2000
+
+endif #BASEWORK_TOOLS
+
+rsource "debug/Kconfig"
+
+rsource "thirdparty/Kconfig"
+
+endif #BASEWORK

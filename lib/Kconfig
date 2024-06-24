@@ -1,0 +1,8 @@
+
+menu "Library"
+
+config MSG_STORAGE_CHECKSUM
+    bool "Enable message checksum"
+    default n
+
+endmenu

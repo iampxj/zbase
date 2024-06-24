@@ -1,0 +1,33 @@
+
+menuconfig SCREEN_MANAGER
+    bool "screen state manager"
+    default y
+
+if SCREEN_MANAGER
+
+config SCREEN_ACTIVE_TIMEOUT
+    int "screen active timeout with seconds"
+    range 5 3600
+    default 10
+
+config SCREEN_STANDBY_TIMEOUT
+    int "screen standby timeout with seconds"
+    range 0 3600
+    default 5
+
+config SCREEN_POST_DELAY
+    int "screen extra active time with milliseconds"
+    default 0
+    help
+      This option is used to increase the activity time to avoid 
+      the screen not refreshing
+
+config SCREEN_STANDBY_BRIGHTNESS
+    int "screen brightness in standby mode"
+    range 10 255
+    default 60
+    help
+      This option just only valid when screen standby 
+      mode has been enabled
+
+endif
