@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#ifdef RTE_ENABLE_STDATOMIC
+#ifdef CONFIG_STDATOMIC_ENABLE
 #ifndef _MSC_VER
 #ifdef __STDC_NO_ATOMICS__
 #error enable_stdatomic=true but atomics not supported by toolchain
@@ -118,7 +118,7 @@ STATIC_ASSERT(rte_memory_order_seq_cst == __ATOMIC_SEQ_CST,
 #define __rte_atomic_thread_fence(memorder) \
 	atomic_thread_fence(memorder)
 
-#else /* !RTE_ENABLE_STDATOMIC */
+#else /* !CONFIG_STDATOMIC_ENABLE */
 
 #define RTE_ATOMIC(type) type
 
