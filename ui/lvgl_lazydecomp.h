@@ -40,6 +40,12 @@ struct lazy_cache_statistics {
 	uint16_t node_misses;
 };
 
+struct aux_memarea {
+	char      *area;
+	size_t    size;
+	void      (*release)(void *ptr);
+};
+
 /*
  * lazy_cache_init - Initialize cache cnotroller
  * 
@@ -94,12 +100,10 @@ int  lazy_cache_decomp(const lv_img_dsc_t *src, lv_img_dsc_t *imgbuf, void *cont
 /*
  * lazy_cache_aux_mempool_init - Initialize aux memory pool for cache controller
  *
- * @area point to cache memory area
- * @size memory size
- * @release point to memory free function
- * return 0 if success
+ * @areas point to memory area
+ * @n the number of memory area
  */
-int  lazy_cache_aux_mempool_init(void *area, size_t size, void (*release)(void *p));
+void lazy_cache_aux_mempool_init(const struct aux_memarea *areas, size_t n);
 
 /*
  * lazy_cache_aux_mempool_uninit - Destroy aux memory pool

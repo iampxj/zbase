@@ -15,7 +15,12 @@ static void lvgl_encoder_scroll_cb(lv_event_t* e) {
 #ifdef CONFIG_SIMULATOR
 	diff *= 200;
 #endif
-	lvgl_encoder_motor_follow_handle(e,false);
+	#if defined CONFIG_BOARD_ATS3085S4_CWR01
+		lvgl_encoder_motor_list_follow_handle(e,false);
+	#else
+		lvgl_encoder_motor_follow_handle(e,false);
+	#endif
+
 	if (data->enc_diff > 0) {
 		lv_coord_t bottom = lv_obj_get_scroll_bottom(obj);
 		if (bottom > 0) {

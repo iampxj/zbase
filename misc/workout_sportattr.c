@@ -4,7 +4,7 @@
 
 #include "basework/assert.h"
 #include "basework/misc/workout_dataimpl.h"
-#include "basework/misc/workout_sport_attr.h"
+#include "basework/misc/workout_sportattr.h"
 #include "basework/misc/workout_sporttype.h"
 
 static const uint8_t sport_workout_mode_attr[] = {

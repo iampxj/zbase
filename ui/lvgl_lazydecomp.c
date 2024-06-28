@@ -45,9 +45,15 @@ struct cache_mempool {
 	char            *area;
 	char            *start;
 	char            *end;
-	char            *endptr;
 	char            *freeptr;
 	void            (*release)(void *p);
+};
+
+struct aux_mempool {
+#define AUX_MEMPOOL_SIZE 10
+	struct cache_mempool slots[AUX_MEMPOOL_SIZE];
+	uint16_t             count;
+	uint16_t             avalible_idx;
 };
 
 struct lazy_cache {
@@ -77,7 +83,7 @@ struct lazy_cache {
 	/*
 	 * Aux memory pool
 	 */
-	struct cache_mempool aux_mempool;
+	struct aux_mempool   aux_mempool;
 #endif
 
 	/*
@@ -88,9 +94,11 @@ struct lazy_cache {
 
 static struct lazy_cache cache_controller;
 
-STATIC_INLINE void cache_mempool_reset(struct cache_mempool* pool) {
-	pool->freeptr = pool->start;
-	pool->endptr  = pool->end;
+
+STATIC_INLINE void aux_mempool_reset(struct aux_mempool *aux) {
+	for (uint16_t i = 0; i < aux->count; i++)
+		aux->slots[i].freeptr = aux->slots[i].start;
+	aux->avalible_idx = 0;
 }
 
 STATIC_INLINE void cache_mempool_init(struct cache_mempool *pool, void *area, 
@@ -98,7 +106,6 @@ STATIC_INLINE void cache_mempool_init(struct cache_mempool *pool, void *area,
 	pool->area     = area;
 	pool->start    = ALIGNED_UP_ADD(area, 0, CACHE_ALIGNED);
 	pool->end      = (char *)area + size;
-	pool->endptr   = pool->end;
 	pool->freeptr  = pool->start;
 	pool->release  = release;
 }
@@ -118,20 +125,25 @@ STATIC_INLINE void *alloc_cache_buffer(struct lazy_cache *cache, size_t size,
 	struct cache_mempool *pool = &cache->main_mempool;
 	void *p;
 
-	if (pool->endptr - pool->freeptr >= size) {
+	if (pool->end - pool->freeptr >= size) {
 		*phead = (void **)&pool->freeptr;
 		p = pool->freeptr;
-		pool->freeptr = ALIGNED_UP_ADD(pool->freeptr, size, CACHE_ALIGNED);
+		pool->freeptr = ALIGNED_UP_ADD(p, size, CACHE_ALIGNED);
 		return p;
 	}
 
-#ifdef CONFIG_LVGL_LAZYDECOMP_AUXMEM 
-	pool = &cache->aux_mempool;
-	if (pool->area && pool->endptr - pool->freeptr >= size) {
-		*phead = (void **)&pool->freeptr;
-		p = pool->freeptr;
-		pool->freeptr = ALIGNED_UP_ADD(pool->freeptr, size, CACHE_ALIGNED);
-		return p;
+#ifdef CONFIG_LVGL_LAZYDECOMP_AUXMEM
+	struct aux_mempool *aux = &cache->aux_mempool;
+	while (aux->avalible_idx < aux->count) {
+		pool = &aux->slots[aux->avalible_idx];
+		if ((long)(pool->end - pool->freeptr) >= size) {
+			void *ptr = pool->freeptr;
+			*phead = (void **)&pool->freeptr;
+			pool->freeptr = ALIGNED_UP_ADD(ptr, size, 64);
+			return ptr;
+		}
+
+		aux->avalible_idx++;
 	}
 #endif /* CONFIG_LVGL_LAZYDECOMP_AUXMEM */
 
@@ -154,10 +166,9 @@ static void lazy_cache_reset(struct lazy_cache *cache) {
 		cache->node_misses    = 0;
 		cache->cache_resets++;
 
-		cache_mempool_reset(&cache->main_mempool);
-
+		cache->main_mempool.freeptr = cache->main_mempool.start;
 #ifdef CONFIG_LVGL_LAZYDECOMP_AUXMEM
-		cache_mempool_reset(&cache->aux_mempool);
+		aux_mempool_reset(&cache->aux_mempool);
 #endif
 
 		char *p = (char *)cache->inodes;
@@ -212,7 +223,7 @@ static void *lazy_cache_get(struct lazy_cache *cache, uint32_t key) {
 
 static void cache_internal_init(struct lazy_cache *cache, void *area, size_t size,
 								void (*release)(void *p)) {
-	cache->policy          = LAZY_CACHE_NONE;
+	cache->policy          = LAZY_CACHE_LRU;
 	cache->cache_limited   = CACHE_LIMIT(size);
 	cache->cache_dirty     = 1;
 	cache->invalid_pending = 0;
@@ -434,18 +445,36 @@ int lazy_cache_renew(size_t size, void* (*alloc)(size_t)) {
 }
 
 #ifdef CONFIG_LVGL_LAZYDECOMP_AUXMEM
-int lazy_cache_aux_mempool_init(void *area, size_t size, 
-	void (*release)(void *p)) {
-	if (area == NULL || size < 512)
-		return -EINVAL;
+void lazy_cache_aux_mempool_init(const struct aux_memarea *areas, size_t n) {
+	struct aux_mempool *aux = &cache_controller.aux_mempool;
+	size_t i;
 
-	cache_mempool_init(&cache_controller.aux_mempool, area, size, release);
+	for (i = 0; i < n; i++) {
+		struct cache_mempool *p;
+		if (areas[i].area == NULL)
+			break;
 
-	return 0;
+		p = &aux->slots[i];
+		p->area = areas[i].area;
+		p->start = ALIGNED_UP_ADD(p->area, 0, 64);
+		p->end = p->area + areas[i].size - 1;
+		p->freeptr = p->start;
+		p->release = areas[i].release;
+	}
+
+	aux->count = (uint16_t)i;
+	aux->avalible_idx = 0;
 }
 
 void lazy_cache_aux_mempool_uninit(void) {
-	cache_mempool_uninit(&cache_controller.aux_mempool);
+	struct aux_mempool *aux = &cache_controller.aux_mempool;
+	for (uint16_t i = 0; i < aux->count; i++) {
+		struct cache_mempool *p = &aux->slots[i];
+		if (p->release)
+			p->release(p->area);
+	}
+	aux->count = 0;
+	aux->avalible_idx = 0;
 
 	/*
 	 * The cache controller will be reset when aux memory pool

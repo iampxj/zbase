@@ -10,7 +10,7 @@ zephyr_library_sources(
     workout_spdata.c
     workout_dataimpl.c
     workout_sportaddedlist.c
-    workout_sport_attr.c
-	# workout_ui_func.c
+    workout_sportattr.c
+    workout_sportsorted.c
 )
 endif()
