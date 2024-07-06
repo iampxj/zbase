@@ -2,7 +2,6 @@
  * Copyright 2024 wtcat
  */
 
-#include "basework/generic.h"
 #ifdef CONFIG_HEADER_FILE
 #include CONFIG_HEADER_FILE
 #endif
