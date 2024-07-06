@@ -6,7 +6,16 @@
 #ifndef BASEWORK_OS_POSIX_OS_BASE_H_
 #define BASEWORK_OS_POSIX_OS_BASE_H_
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
+
 #include <errno.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <assert.h>
@@ -108,6 +117,18 @@ _os_thread_change_prio(os_thread_t *thread, int newprio,
         *oldprio = 0;
     }
     return pthread_setschedprio(thread->thread, newprio);
+}
+
+OS_THREAD_API int 
+_os_thread_setaffinity(os_thread_t *thread, size_t cpusetsize, 
+    const cpu_set_t *cpuset) {
+    return pthread_setaffinity_np(thread->thread, cpusetsize, cpuset);
+}
+
+OS_THREAD_API int 
+_os_thread_getaffinity(os_thread_t *thread, size_t cpusetsize, 
+    cpu_set_t *cpuset) {
+    return pthread_getaffinity_np(thread->thread, cpusetsize, cpuset);
 }
 
 OS_THREAD_API int 
