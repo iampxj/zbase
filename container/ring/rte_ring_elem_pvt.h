@@ -97,7 +97,7 @@ __rte_ring_enqueue_elems_64(struct rte_ring *r, uint32_t prod_head,
 	}
 }
 
-#if 0
+#ifdef RTE_CPU_INT128
 static __rte_always_inline void
 __rte_ring_enqueue_elems_128(struct rte_ring *r, uint32_t prod_head,
 		const void *obj_table, uint32_t n)
@@ -126,7 +126,7 @@ __rte_ring_enqueue_elems_128(struct rte_ring *r, uint32_t prod_head,
 				(const void *)(obj + i), 16);
 	}
 }
-#endif
+#endif /* RTE_CPU_INT128 */
 
 /* the actual enqueue of elements on the ring.
  * Placed here since identical code needed in both
@@ -141,8 +141,10 @@ __rte_ring_enqueue_elems(struct rte_ring *r, uint32_t prod_head,
 	 */
 	if (esize == 8)
 		__rte_ring_enqueue_elems_64(r, prod_head, obj_table, num);
-	// else if (esize == 16)
-	// 	__rte_ring_enqueue_elems_128(r, prod_head, obj_table, num);
+#ifdef RTE_CPU_INT128
+	else if (esize == 16)
+		__rte_ring_enqueue_elems_128(r, prod_head, obj_table, num);
+#endif /* RTE_CPU_INT128 */
 	else {
 		uint32_t idx, scale, nr_idx, nr_num, nr_size;
 
@@ -233,7 +235,7 @@ __rte_ring_dequeue_elems_64(struct rte_ring *r, uint32_t cons_head,
 	}
 }
 
-#if 0
+#ifdef RTE_CPU_INT128
 static __rte_always_inline void
 __rte_ring_dequeue_elems_128(struct rte_ring *r, uint32_t cons_head,
 		void *obj_table, uint32_t n)
@@ -258,7 +260,7 @@ __rte_ring_dequeue_elems_128(struct rte_ring *r, uint32_t cons_head,
 			memcpy((void *)(obj + i), (void *)(ring + idx), 16);
 	}
 }
-#endif
+#endif /* RTE_CPU_INT128 */
 
 /* the actual dequeue of elements from the ring.
  * Placed here since identical code needed in both
@@ -273,8 +275,10 @@ __rte_ring_dequeue_elems(struct rte_ring *r, uint32_t cons_head,
 	 */
 	if (esize == 8)
 		__rte_ring_dequeue_elems_64(r, cons_head, obj_table, num);
-	// else if (esize == 16)
-	// 	__rte_ring_dequeue_elems_128(r, cons_head, obj_table, num);
+#ifdef RTE_CPU_INT128
+	else if (esize == 16)
+		__rte_ring_dequeue_elems_128(r, cons_head, obj_table, num);
+#endif
 	else {
 		uint32_t idx, scale, nr_idx, nr_num, nr_size;
 

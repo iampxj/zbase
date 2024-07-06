@@ -24,6 +24,8 @@
 #include "basework/log.h"
 #include "basework/boot/boot.h"
 #include "basework/lib/string.h"
+#include "basework/utils/binmerge.h"
+#include "basework/lib/crc.h"
 
 #ifndef _MB
 #define _MB(n) ((n) * 1024 * 1024ul)
@@ -563,6 +565,33 @@ static void partition_completed(int err, void *fp, const char *fname,
     }
 }
 
+static bool check_ota_environment(const struct file_header *header) {
+#define GLOBAL_PARTITION_ADDR 0x1000
+#define GLOBAL_PARTITION_SIZE 1024
+    char buffer[GLOBAL_PARTITION_SIZE];
+	struct disk_device *dd = NULL;
+	uint16_t crc;
+
+    /*
+     * Skip partition check
+     */
+    if (header->param == 0x0)
+        return true;
+
+	disk_device_open("spi_flash", &dd);
+	assert(dd != NULL);
+
+    disk_device_read(dd, buffer, sizeof(buffer), 
+        GLOBAL_PARTITION_ADDR);
+    crc = lib_crc16(buffer, sizeof(buffer));
+    if (header->param != crc) {
+        pr_err("Error***: firmware partition signature is 0x%04x\n", crc);
+        return false;
+    }
+
+	return true;
+}
+
 static int __rte_notrace ota_fstream_init(const struct device *dev) {
     (void) dev;
     static const struct ota_fstream_ops fstream_ops = {
@@ -572,6 +601,7 @@ static int __rte_notrace ota_fstream_init(const struct device *dev) {
         .completed = partition_completed
     };
     ota_fstream_set_ops(&fstream_ops);
+    ota_fstream_set_envchecker(check_ota_environment);
     return 0;
 }
 

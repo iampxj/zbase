@@ -5,6 +5,7 @@ target_sources(basework
     osapi.c
     osapi_fs.c
     osapi_obj.c
+    osapi_bus.c
 )
 
 if (LINUX)

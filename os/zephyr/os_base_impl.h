@@ -30,9 +30,9 @@ extern "C"{
 /* */
 #ifndef CONFIG_BOOTLOADER
 #define os_completion_declare(_cp) struct k_sem _cp;
-#define os_completion_reinit(_cp)  k_sem_init(&(_cp), 0, 1)
-#define os_completion_wait(_cp)    k_sem_take(&(_cp), K_FOREVER)
-#define os_completed(_cp)          k_sem_give(&(_cp))
+#define os_completion_reinit(_cp)  k_sem_init((_cp), 0, 1)
+#define os_completion_wait(_cp)    k_sem_take((_cp), K_FOREVER)
+#define os_completed(_cp)          k_sem_give((_cp))
 
 #endif /* CONFIG_BOOTLOADER */
 

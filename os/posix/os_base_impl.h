@@ -29,9 +29,9 @@ extern "C"{
 
 /* Completion */
 #define os_completion_declare(_cp) sem_t _cp;
-#define os_completion_reinit(_cp)  sem_init(&(_cp), 0, 0)
-#define os_completion_wait(_cp)    sem_wait(&(_cp))
-#define os_completed(_cp)          sem_post(&(_cp))
+#define os_completion_reinit(_cp)  sem_init((_cp), 0, 0)
+#define os_completion_wait(_cp)    sem_wait((_cp))
+#define os_completed(_cp)          sem_post((_cp))
 
 
 /*

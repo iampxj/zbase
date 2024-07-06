@@ -5,6 +5,7 @@
 #define BASEWORK_LIB_STRING_H_
 
 #include <stddef.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C"{

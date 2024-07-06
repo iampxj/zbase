@@ -90,7 +90,7 @@ void _rq_static_init(struct rq_context *rq) {
 
     RTE_INIT_LIST(&rq->frees);
     RTE_INIT_LIST(&rq->pending);
-    os_completion_reinit(rq->completion);
+    os_completion_reinit(&rq->completion);
     for (int i = 0; i < rq->nq; i++) {
         rte_list_add_tail(&p->node, &rq->frees);
         p = (struct rq_node *)((char *)p + sizeof(struct rq_node));
@@ -139,7 +139,7 @@ static void rq_add_node_locked(struct rq_context *rq, struct rq_node *rn,
     rq->nr++;
     /* We will wake up the schedule queue if necessary */
     if (need_wakeup)
-        os_completed(rq->completion);
+        os_completed(&rq->completion);
 } 
 
 #ifdef USE_RQ_DEBUG
@@ -315,7 +315,7 @@ void _rq_schedule(struct rq_context *rq) {
              * Now, The queue is empty and we have no more work to do, So we
              * trigger task schedule and switch to other task.
              */
-            os_completion_wait(rq->completion);
+            os_completion_wait(&rq->completion);
             os_critical_lock
             continue;
         }
@@ -405,7 +405,7 @@ void __rte_notrace _rq_visitor(struct rq_context *rq,
 	rte_list_splice(&head, &rq->pending);
 	os_critical_unlock
 	if (wakeup)
-		os_completed(rq->completion);
+		os_completed(&rq->completion);
 }
 
 void __rte_notrace _rq_dump(struct rq_context *rq) {

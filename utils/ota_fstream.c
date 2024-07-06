@@ -10,6 +10,7 @@
 #define CONFIG_LOGLEVEL   LOGLEVEL_DEBUG
 #include <errno.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 
@@ -19,12 +20,14 @@
 #include "basework/log.h"
 #include "basework/utils/ota_fstream.h"
 #include "basework/env.h"
+#include "basework/lib/crc.h"
 
 struct extract_context {
     int (*state_exec)(struct extract_context *ctx, 
         const void *buf, size_t size);
     int (*prog_notity)(const char *name, int percent);
     unsigned int (*get_value)(const char *key);
+    bool (*check_env)(const struct file_header *header);
     const struct ota_fstream_ops *f_ops;
     struct file_header *f_header;
     struct file_node *f_node;
@@ -129,13 +132,19 @@ static int ota_file_check(struct extract_context *ctx) {
     uint32_t devid = ota_get_value(ctx, "devid");
     int err = -EINVAL;
 
-    if (h->devid != devid) {
+    if (ota_get_value(ctx, "devid") != h->devid) {
         npr_err(default, "Error***: The device(%d) does not support this ota-firmware(%d)!\n", 
-            devid, h->devid);
-        npr_err(LOG_REDIRECT, "Error***: The device(%d) does not support this ota-firmware(%d)!\n", 
             devid, h->devid);
         return -EINVAL;
     }
+
+    if (ctx->check_env) {
+        if (!ctx->check_env(h)) {
+            npr_err(disk, "Error***: OTA package does not match current firmware\n");
+            return -EINVAL;
+        }
+    }
+
     if (h) {
         npr_info(default, "ota file header: magic(0x%x) crc(0x%x) size(%d) num(%d)\n",
             h->magic, h->crc, h->size, h->nums);
@@ -358,6 +367,14 @@ int ota_fstream_set_notify(int (*notify)(const char *, int)) {
 int ota_fstream_set_kvfn(unsigned int (*getv)(const char *)) {
     if (getv) {
         sm_context.get_value = getv;
+        return 0;
+    }
+    return -EINVAL; 
+}
+
+int ota_fstream_set_envchecker(bool (*check_env)(const struct file_header *header)) {
+    if (check_env) {
+        sm_context.check_env = check_env;
         return 0;
     }
     return -EINVAL; 

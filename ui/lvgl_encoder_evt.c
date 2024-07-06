@@ -15,7 +15,9 @@ static void lvgl_encoder_scroll_cb(lv_event_t* e) {
 #ifdef CONFIG_SIMULATOR
 	diff *= 200;
 #endif
-	#if defined CONFIG_BOARD_ATS3085S4_CWR01
+	#if defined(CONFIG_BOARD_ATS3085S4_CWR01) ||\
+		defined(CONFIG_BOARD_ATS3085S4_CWS05) ||\
+		defined(CONFIG_BOARD_ATS3085S4_CWS01)
 		lvgl_encoder_motor_list_follow_handle(e,false);
 	#else
 		lvgl_encoder_motor_follow_handle(e,false);

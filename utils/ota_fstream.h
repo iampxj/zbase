@@ -4,6 +4,7 @@
 #ifndef BASEWORK_UTILS_OTA_FSTREAM_H_
 #define BASEWORK_UTILS_OTA_FSTREAM_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -12,6 +13,7 @@
 #ifdef __cplusplus
 extern "C"{
 #endif
+struct file_header;
 
 struct ota_fstream_ops {
     void *(*open)(const char *name);
@@ -23,6 +25,7 @@ struct ota_fstream_ops {
 int  ota_fstream_set_ops(const struct ota_fstream_ops *ops);
 int  ota_fstream_set_notify(int (*notify)(const char *, int));
 int  ota_fstream_set_kvfn(unsigned int (*getv)(const char *));
+int  ota_fstream_set_envchecker(bool (*check_env)(const struct file_header *header));
 int  ota_fstream_write(const void *buf, size_t size);
 void ota_fstream_finish(void);
 uint32_t ota_fstream_get_devid(void);

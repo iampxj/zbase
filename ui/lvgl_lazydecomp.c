@@ -28,7 +28,7 @@
 #endif
 
 #define CACHE_ALIGNED   64
-#define CACHE_LIMIT(n)  (size_t)(((uintptr_t)(n) * 2) / 3)
+#define CACHE_LIMIT(n)  (size_t)(((uintptr_t)(n) * 9) / 10)
 
 #define ALIGNED_UP_ADD(p, size, align) \
 	(char *)(((uintptr_t)p + size + align - 1) & ~(align - 1))

@@ -33,7 +33,8 @@ struct file_header_base {
 
 struct file_header {
 	FILE_HEADER_BASE
-	uint32_t devid;
+	uint16_t devid;
+	uint16_t param;
 	struct file_node headers[];
 };
 

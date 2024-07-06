@@ -27,6 +27,12 @@
 # define _STATIC_ASSERT_NAME(_name) RTE_JOIN(_static_assert, _name)
 #endif
 
+#if UINTPTR_MAX  == UINT64_MAX
+#define RTE_CPU_64 1
+#else
+#define RTE_CPU_32 1
+#endif
+
 #if defined(__clang__) || defined(__GNUC__)
 # define RTE_RET_IP __builtin_return_address(0)
 #else
