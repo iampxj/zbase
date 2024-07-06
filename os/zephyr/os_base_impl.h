@@ -45,6 +45,7 @@ extern "C"{
 #define OS_CV_API     
 #define OS_SEM_API    static __rte_always_inline
 
+typedef void* cpu_set_t;
 typedef struct {
     struct k_thread thread;
 } os_thread_t;
@@ -87,6 +88,18 @@ _os_thread_change_prio(os_thread_t *thread, int newprio,
         *oldprio = k_thread_priority_get(&thread->thread);
     k_thread_priority_set(&thread->thread, newprio);
     return 0;
+}
+
+OS_THREAD_API int 
+_os_thread_setaffinity(os_thread_t *thread, size_t cpusetsize, 
+    const cpu_set_t *cpuset) {
+    return -ENOSYS;
+}
+
+OS_THREAD_API int 
+_os_thread_getaffinity(os_thread_t *thread, size_t cpusetsize, 
+    cpu_set_t *cpuset) {
+    return -ENOSYS;
 }
 
 OS_THREAD_API int 

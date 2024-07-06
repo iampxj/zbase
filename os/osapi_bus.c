@@ -10,6 +10,7 @@
 #define CONFIG_LOGLEVEL  LOGLEVEL_DEBUG
 #include <stdio.h>
 
+#include "basework/rte_atomic.h"
 #include "basework/os/osapi.h"
 #include "basework/os/osapi_bus.h"
 #include "basework/container/kfifo.h"
@@ -33,6 +34,9 @@ struct iobus_sq {
 
     /* MP -> SC */
     STRUCT_KFIFO_PTR(struct iobus_sqe *) queue;
+
+    /* Reference count */
+    rte_atomic32_t refcnt;
 
     char name[16];
     os_thread_t thread;
@@ -165,6 +169,7 @@ iobus_create(const char *buses[], enum iobus_type type, int qsize,
         }
     }
 
+    rte_atomic32_init(&sq->refcnt);
     os_completion_reinit(&sq->completion);
     snprintf(sq->name, sizeof(sq->name), "iobus-%d", iobus_id);
     err = os_thread_spawn(&sq->thread, sq->name, stack, 
@@ -191,6 +196,9 @@ int
 iobus_destroy(struct iobus_sq *sq) {
     if (sq == NULL)
         return -EINVAL;
+    
+    if (rte_atomic32_read(&sq->refcnt) > 0)
+        return -EBUSY;
 
     os_thread_destroy(&sq->thread);
     os_mtx_lock(&iobus_mtx);
@@ -201,10 +209,24 @@ iobus_destroy(struct iobus_sq *sq) {
 }
 
 struct iobus_device *
-iobus_find(const char *bus) {
+iobus_request(const char *bus) {
+    struct iobus_device *iod;
+
     if (bus == NULL)
         return NULL;
-    return iobus_search(bus);
+    iod = iobus_search(bus);
+    if (iod)
+        rte_atomic32_add(&iod->sq->refcnt, 1);
+    return iod;
+}
+
+int 
+iobus_release(struct iobus_device *iod) {
+    if (iod == NULL)
+        return -EINVAL;
+    
+    rte_atomic32_sub(&iod->sq->refcnt, 1);
+    return 0;
 }
 
 int 

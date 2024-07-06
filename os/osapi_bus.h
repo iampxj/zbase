@@ -109,7 +109,8 @@ int iobus_init(void);
 int iobus_create(const char *buses[], enum iobus_type type, int qsize, 
     int prio, void *stack, int stacksize);
 int iobus_destroy(struct iobus_sq *sq);
-struct iobus_device *iobus_find(const char *bus);
+struct iobus_device *iobus_request(const char *bus);
+int iobus_release(struct iobus_device *iod);
 int __iobus_burst_submit(struct iobus_sq *sq, struct iobus_sqe **sqes, 
     size_t n);
 int iobus_burst_submit_wait(struct iobus_device *iodev, 
