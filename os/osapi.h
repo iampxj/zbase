@@ -156,8 +156,8 @@ OS_MTX_API int _os_mtx_lock(os_mutex_t *mtx);
 OS_MTX_API int _os_mtx_unlock(os_mutex_t *mtx);
 #endif
 
-#ifndef _os_mtx_timedlock
-#define _os_mtx_timedlock(mtx, timeout) \
+#ifndef os_mtx_timedlock
+#define os_mtx_timedlock(mtx, timeout) \
     _os_mtx_timedlock(mtx, timeout)
 OS_MTX_API int _os_mtx_timedlock(os_mutex_t *mtx, uint32_t timeout);
 #endif
