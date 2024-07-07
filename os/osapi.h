@@ -125,7 +125,7 @@ OS_THREAD_API void  *_os_thread_self(void);
 
 #ifndef os_thread_exit
 #define os_thread_exit() \
-    os_thread_destroy(os_thread_self())
+    _os_thread_destroy(os_thread_self())
 OS_THREAD_API int _os_thread_destroy(os_thread_t *thread);
 #endif
 
