@@ -167,7 +167,7 @@ struct vfs_file {
 VFS_STATIC_INLINE ssize_t 
 vfs_read(os_file_t fd, void *buf, size_t len) {
 	VFS_CHECK_VALID(fd, -EINVAL);
-#ifndef CONFIG_VFS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_VFS_PARAM_CHECKER
 	if (rte_unlikely(buf == NULL))
 		return -EINVAL;
 	if (rte_unlikely(len == 0))
@@ -187,7 +187,7 @@ vfs_read(os_file_t fd, void *buf, size_t len) {
 VFS_STATIC_INLINE ssize_t 
 vfs_write(os_file_t fd, const void *buf, size_t len) {
 	VFS_CHECK_VALID(fd, -EINVAL);
-#ifndef CONFIG_VFS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_VFS_PARAM_CHECKER
 	if (rte_unlikely(buf == NULL))
 		return -EINVAL;
 	if (rte_unlikely(len == 0))

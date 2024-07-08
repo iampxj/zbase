@@ -16,7 +16,7 @@ extern "C"{
 struct file_header;
 
 struct ota_fstream_ops {
-    void *(*open)(const char *name);
+    void *(*open)(const char *name, size_t fsize);
     void (*close)(void *fd);
     int  (*write)(void *fd, const void *buf, size_t size, uint32_t offset);
     void (*completed)(int err, void *fd, const char *filename, size_t size);

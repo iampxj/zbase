@@ -29,12 +29,12 @@ config OS_TIMER_TRACER
     bool "Enable timer tracer"
     default n
 
-config VFS_PARAM_CHECKER_DISABLE
-    bool "Disable vfs parameter checker"
-    default y
+config VFS_PARAM_CHECKER
+    bool "Enable parameter checker for VFS"
+    default n
 
-config IOBUS_PARAM_CHECKER_DISABLE
-    bool "Disable iobus paramter checker"
-    default y
+config IOBUS_PARAM_CHECKER
+    bool "Enable paramter checker for iobus"
+    default n
         
 endmenu

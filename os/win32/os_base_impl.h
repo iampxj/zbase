@@ -58,6 +58,8 @@ typedef struct {
 	sem_t sem;
 } os_sem_t;
 
+typedef void *cpu_set_t;
+
 #if 0
 extern int pthread_setname_np(pthread_t __target_thread, const char *__name) __THROW
 	__nonnull((2));

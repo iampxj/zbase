@@ -6,7 +6,7 @@
 #include CONFIG_HEADER_FILE
 #endif
 
-#define pr_fmt(fmt) "ota_fstream: " fmt
+#define pr_fmt(fmt) "<ota_fstream>: " fmt
 #define CONFIG_LOGLEVEL   LOGLEVEL_DEBUG
 #include <errno.h>
 #include <stddef.h>
@@ -45,10 +45,15 @@ struct extract_context {
 #define USE_DISKLOG
 
 #ifdef USE_DISKLOG
-# define LOG_REDIRECT disk
-#else
-# define LOG_REDIRECT default
-#endif
+#define OTA_LOG(fmt, ...) \
+do { \
+    npr_err(default, fmt, ##__VA_ARGS__); \
+    npr_err(disk, fmt, ##__VA_ARGS__); \
+} while (0)
+
+#else /* !USE_DISKLOG*/
+#define OTA_LOG(fmt, ...) npr_err(default, fmt, ##__VA_ARGS__)
+#endif /* USE_DISKLOG */
 
 #define BUF_SIZE 0
 #define MIN(a, b) ((a) < (b)? (a): (b))
@@ -93,9 +98,9 @@ static void ota_file_notify(struct extract_context *ctx,
 }
 
 static int open_file_partition(struct extract_context *ctx, 
-    const char *name) {
+    const char *name, size_t fsize) {
     if (ctx->f_ops->open) {
-        ctx->fd = ctx->f_ops->open(name);
+        ctx->fd = ctx->f_ops->open(name, fsize);
         if (ctx->fd)
             return 0;
         return -ENODATA;
@@ -146,24 +151,17 @@ static int ota_file_check(struct extract_context *ctx) {
     }
 
     if (h) {
-        npr_info(default, "ota file header: magic(0x%x) crc(0x%x) size(%d) num(%d)\n",
-            h->magic, h->crc, h->size, h->nums);
-        npr_info(LOG_REDIRECT, "ota file header: magic(0x%x) crc(0x%x) size(%d) num(%d)\n",
+        OTA_LOG("ota file header: magic(0x%x) crc(0x%x) size(%d) num(%d)\n",
             h->magic, h->crc, h->size, h->nums);
         for (size_t i = 0; i < h->nums; i++) {
-            npr_info(default, " => file(%s) offset(%d) size(%d)\n", 
+            OTA_LOG(" => file(%s) offset(%d) size(%d)\n", 
                 h->headers[i].f_name,
                 h->headers[i].f_offset,
                 h->headers[i].f_size);
-            npr_info(LOG_REDIRECT, " => file(%s) offset(%d) size(%d)\n", 
-                h->headers[i].f_name,
-                h->headers[i].f_offset,
-                h->headers[i].f_size);
-
-            err = open_file_partition(ctx, h->headers[i].f_name);
+ 
+            err = open_file_partition(ctx, h->headers[i].f_name, 0);
             if (err) {
-                npr_err(default, "invalid file(%s)\n", h->headers[i].f_name);
-                npr_err(LOG_REDIRECT, "invalid file(%s)\n", h->headers[i].f_name);
+                OTA_LOG("invalid file(%s)\n", h->headers[i].f_name);
                 break;
             }
         }
@@ -200,7 +198,7 @@ static int end_state(struct extract_context *ctx) {
         reset_state_machine(ctx);
     }
     assert(ctx->f_header == NULL);
-    pr_dbg("ota write end with error(%d)\n", err);
+    pr_dbg("ota write end with error(%d, caller:%p) \n", err, RTE_RET_IP);
     return err;
 }
 
@@ -211,24 +209,24 @@ static int read_fileheader_state(struct extract_context *ctx,
         size_t hsize, bytes;
 
         if (size < sizeof(struct file_header)) {
-            npr_err(LOG_REDIRECT, "buffer size is too small\n");
+            OTA_LOG("buffer size is too small\n");
             return -EINVAL;
         }
 
         fh = (const struct file_header *)buf;
         if (fh->magic != FILE_HMAGIC) {
-            npr_err(LOG_REDIRECT, "Invalid file\n");
+            OTA_LOG("Invalid file\n");
             return -EINVAL;
         }
         hsize = fh->nums * sizeof(struct file_node) + sizeof(struct file_header);
         if (size < hsize) {
-            npr_err(LOG_REDIRECT, "buffer size is less than the size of file_head\n");
+            OTA_LOG("buffer size is less than the size of file_head\n");
             return -EINVAL;
         }
         
         ctx->f_header = general_malloc(hsize + BUF_SIZE);
         if (!ctx->f_header) {
-            npr_err(LOG_REDIRECT, "no more memory\n");
+            OTA_LOG("no more memory\n");
             return -ENOMEM;
         }
 
@@ -241,7 +239,7 @@ static int read_fileheader_state(struct extract_context *ctx,
         size -= bytes;
 
         if (ota_file_check(ctx)) {
-            npr_err(LOG_REDIRECT, "file check failed\n");
+            OTA_LOG("file check failed\n");
             reset_state_machine(ctx);
             return -ENOENT;
         }
@@ -251,7 +249,7 @@ static int read_fileheader_state(struct extract_context *ctx,
                 (char *)buf + bytes, size);
         }
     }
-    npr_err(LOG_REDIRECT, "ota file header is invalid\n");
+    OTA_LOG("ota file header is invalid\n");
     return -EINVAL;
 }
 
@@ -260,16 +258,15 @@ static int write_new_file(struct extract_context *ctx,
 	size_t remain;
 	int ofs;
 
-_loop:	
-    close_file_partition(ctx);
+_loop:
+    if (ctx->f_node >= ctx->f_header->headers)
+        close_file_partition(ctx);
     ctx->f_node++;
     pr_notice("Create file (%s) ctx->f_node(%p),f_size(%d),p_ofs(%d) size(%d)\n", 
         ctx->f_node->f_name, ctx->f_node,ctx->f_node->f_size, ctx->p_ofs, size);
     	
-    if (open_file_partition(ctx, ctx->f_node->f_name)) {
-        npr_err(default, "Create file partition(%s) failed\n", 
-            ctx->f_node->f_name);
-        npr_err(LOG_REDIRECT, "Create file partition(%s) failed\n", 
+    if (open_file_partition(ctx, ctx->f_node->f_name, ctx->f_node->f_size)) {
+        OTA_LOG("Create file partition(%s) failed\n", 
             ctx->f_node->f_name);
         ctx->err = -ENODATA;
         return end_state(ctx);
@@ -289,7 +286,7 @@ _loop:
         if (remain > 0) {
             if (ctx->f_node - ctx->f_header->headers >= 
                 (int)ctx->f_header->nums - 1) {
-                pr_err("Data size does not match the header\n");
+                OTA_LOG("Data size does not match the header\n");
                 ofs = -EFBIG;
                 goto _failed;
             }
@@ -303,7 +300,7 @@ _loop:
     }
 
 _failed:
-    npr_err(LOG_REDIRECT, "%s write failed\n", __func__);
+    OTA_LOG("%s write failed\n", __func__);
     ctx->err = ofs;
     return end_state(ctx);
 }
@@ -319,6 +316,7 @@ static int write_file_state(struct extract_context *ctx,
         if (ofs < 0) {
             assert(ofs == (int)bytes);
             ctx->err = ofs;
+            OTA_LOG("write parition file failed(%d)\n", ofs);
             return end_state(ctx);
         }
         size -= bytes;
@@ -341,7 +339,7 @@ static int write_file_state(struct extract_context *ctx,
         return 0;
     }
 
-    npr_err(LOG_REDIRECT, "%s write failed\n", __func__);
+    OTA_LOG("%s write failed\n", __func__);
     ctx->err = ofs;
     return end_state(ctx);
 }
@@ -382,13 +380,14 @@ int ota_fstream_set_envchecker(bool (*check_env)(const struct file_header *heade
 
 int ota_fstream_write(const void *buf, size_t size) {
     if (!sm_context.f_ops) {
-        npr_err(LOG_REDIRECT, "invalid file operation\n");
+        OTA_LOG("invalid file operation\n");
         return -EINVAL;
     }
     return sm_context.state_exec(&sm_context, buf, size);
 }
 
 void ota_fstream_finish(void) {
+    pr_notice("ota_fstream_finish\n");
     end_state(&sm_context);
 }
 

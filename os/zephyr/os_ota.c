@@ -8,7 +8,7 @@
 
 #define CONFIG_LOGLEVEL  LOGLEVEL_DEBUG
 #define pr_fmt(fmt) "os_ota: " fmt
-#include <assert.h>
+
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
@@ -16,6 +16,7 @@
 #include <partition/partition.h>
 #include <sdfs.h>
 
+#include "basework/assert.h"
 #include "basework/lib/fnmatch.h"
 #include "basework/dev/blkdev.h"
 #include "basework/dev/disk.h"
@@ -35,10 +36,16 @@ struct file_partition {
     struct disk_device *dd;
     uint32_t offset;
     uint32_t len;
+    uint32_t file_size;
+    uint32_t file_blksize;
+    uint32_t dirty_offset;
+    uint32_t max_erasesize;
+    uint32_t erase_mask;
     const char *name;
 };
 
 static bool res_first = true;
+static bool ota_record_new;
 static struct file_partition file_dev;
 static struct partition_entry resext_entry = {
     .name = {"res_ext"},
@@ -68,11 +75,11 @@ void resource_ext_check(void) {
     const struct partition_entry *part;
 
     fw = disk_partition_find("firmware");
-    assert(fw != NULL);
+    rte_assert(fw != NULL);
 
     part = partition_get_stf_part(STORAGE_ID_NOR, 
         PARTITION_FILE_ID_SYSTEM);
-    assert(part != NULL);
+    rte_assert(part != NULL);
 
     if (part->size < 0x1c2000)
         resext_entry.offset = PARTITION_OFS(0x1c2000);
@@ -136,7 +143,7 @@ static void *partition_get_fd(struct file_partition *dev, const char *name) {
         return NULL;
 
     dp = disk_partition_find("firmware");
-    assert(dp != NULL);
+    rte_assert(dp != NULL);
     dev->offset = dp->offset;
     dev->len = pe->size;
     dev->name = name;
@@ -171,21 +178,21 @@ static int generate_ota_nlog(const struct disk_partition *dp,
     rec.dl_size = fw->len;
 
     pe = partition_get_stf_part(STORAGE_ID_NOR, 4);
-    assert(pe != NULL);
+    rte_assert(pe != NULL);
     strlcpy(rec.nodes[idx].f_name, "zephyr.bin", MAX_NAMELEN);
     rec.nodes[idx].f_offset = pe->offset;
     rec.nodes[idx].f_size   = pe->size;
     idx++;
 
     pe = partition_get_stf_part(STORAGE_ID_NOR, partition_get_fid("res+.bin"));
-    assert(pe != NULL);
+    rte_assert(pe != NULL);
     strlcpy(rec.nodes[idx].f_name, "res+.bin", MAX_NAMELEN);
     rec.nodes[idx].f_offset = pe->offset;
     rec.nodes[idx].f_size   = pe->size;
     idx++;
     
     pe = partition_get_stf_part(STORAGE_ID_NOR, partition_get_fid("fonts+.bin"));
-    assert(pe != NULL);
+    rte_assert(pe != NULL);
     strlcpy(rec.nodes[idx].f_name, "fonts+.bin", MAX_NAMELEN);
     rec.nodes[idx].f_offset = pe->offset;
     rec.nodes[idx].f_size   = pe->size;
@@ -196,7 +203,7 @@ static int generate_ota_nlog(const struct disk_partition *dp,
     err = disk_partition_erase_all(dp);
     err |= disk_partition_write(dp, 0, &rec, sizeof(rec));
 
-    assert(err == 0);
+    rte_assert(err == 0);
     pr_dbg("updated ota information\n");
 
     return err;
@@ -229,23 +236,24 @@ static int generate_ota_log(const struct disk_partition *dp,
     struct firmware_pointer fwchk;
     disk_partition_read(dp, 0, &fwchk, sizeof(fwchk));
     if (fwchk.addr.fw_offset != fwinfo.addr.fw_offset)
-        assert(0);
+        rte_assert(0);
     
     return 0;
 }
 
-static void* partition_open(const char *name) {
+static struct file_partition *
+__partition_open(const char *name, size_t fsize) {
     const struct partition_entry *parti;
 
     if (!file_dev.dd) {
         disk_device_open("spi_flash", &file_dev.dd);
-        assert(file_dev.dd != NULL);
+        rte_assert(file_dev.dd != NULL);
     }
     /* Picture resource partition */
     if (!strcmp(name, "res.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 
             PARTITION_FILE_ID_SDFS_PART0);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "picture";
@@ -258,7 +266,7 @@ static void* partition_open(const char *name) {
     if (!strcmp(name, "res_ext.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 
             PARTITION_FILE_ID_SDFS_PART1);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
 		file_dev.offset = parti->offset;
 		file_dev.len = parti->size;
         file_dev.name = "picture-ext";
@@ -271,7 +279,7 @@ static void* partition_open(const char *name) {
     if (!strcmp(name, "fonts.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 
             PARTITION_FILE_ID_SDFS_PART2);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "font";
@@ -284,7 +292,7 @@ static void* partition_open(const char *name) {
     if (!strcmp(name, "sdfs.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 
             PARTITION_FILE_ID_SDFS);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "sdfs";
@@ -296,7 +304,7 @@ static void* partition_open(const char *name) {
     if (!strcmp(name, "sdfs_k.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 
             20);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "sdfs_k";
@@ -309,7 +317,7 @@ static void* partition_open(const char *name) {
     if (!strcmp(name, "dial.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 
             PARTITION_FILE_ID_UDISK);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "dial";
@@ -324,22 +332,26 @@ static void* partition_open(const char *name) {
         !strcmp(name, "fwpack.bin")) {
         const struct disk_partition *dp, *fdp;
         dp = disk_partition_find("firmware");
-        assert(dp != NULL);
+        rte_assert(dp != NULL);
         file_dev.offset = dp->offset;
         file_dev.len = dp->len;
         file_dev.name = "firmware";
         pr_dbg("open firmware partition: start(0x%x) size(%d)\n", 
             dp->offset, dp->len);
         
-        fdp = disk_partition_find("firmware_cur");
-        assert(fdp != NULL);
+        if (fsize > 0) {
+            fdp = disk_partition_find("firmware_cur");
+            rte_assert(fdp != NULL);
 
-        if (!strcmp(name, "fwpack.bin")) {
-            pr_notice("generate firmware package information\n");
-            generate_ota_nlog(fdp, dp);
-        } else {
-            pr_notice("generate firmware information\n");
-            generate_ota_log(fdp, dp);
+            if (!strcmp(name, "fwpack.bin")) {
+                pr_notice("generate firmware package information\n");
+                generate_ota_nlog(fdp, dp);
+                ota_record_new = true;
+            } else {
+                pr_notice("generate firmware information\n");
+                generate_ota_log(fdp, dp);
+                ota_record_new = false;
+            }
         }
 
         return &file_dev;
@@ -347,7 +359,7 @@ static void* partition_open(const char *name) {
 #else
     if (!strcmp(name, "zephyr.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 50);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset + 0x1000;
         file_dev.len = parti->size - 0x1000;
         file_dev.name = "firmware";
@@ -359,7 +371,7 @@ static void* partition_open(const char *name) {
 
     if (!strcmp(name, "wtm_app.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 51);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "wtm_app";
@@ -370,7 +382,7 @@ static void* partition_open(const char *name) {
 
     if (!strcmp(name, "wtm_boot.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 50);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "wtm_boot";
@@ -382,7 +394,7 @@ static void* partition_open(const char *name) {
     if (!strcmp(name, "msgfile.bin")) {
         const struct disk_partition *dp;
         dp = disk_partition_find("msgfile.db");
-        assert(dp != NULL);
+        rte_assert(dp != NULL);
         file_dev.offset = dp->offset;
         file_dev.len = dp->len;
         file_dev.name = "msgfile";
@@ -393,7 +405,7 @@ static void* partition_open(const char *name) {
 
     if (!strcmp(name, "bream.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 43);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "gps_brm";
@@ -404,7 +416,7 @@ static void* partition_open(const char *name) {
 			
 	if (!strcmp(name, "cc1165_fw.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 45);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "cc1165_fw";
@@ -415,7 +427,7 @@ static void* partition_open(const char *name) {
 
     if (!strcmp(name, "cc1165_boot.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 44);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "cc1165_boot";
@@ -426,7 +438,7 @@ static void* partition_open(const char *name) {
 
     if (!strcmp(name, "recovery.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 3);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "recovery";
@@ -437,7 +449,7 @@ static void* partition_open(const char *name) {
 	
     if (!strcmp(name, "mbrec.bin")) {
         parti = partition_get_stf_part(STORAGE_ID_NOR, 1);
-        assert(parti != NULL);
+        rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
         file_dev.name = "mbrec";
@@ -449,7 +461,7 @@ static void* partition_open(const char *name) {
     if (!strcmp(name, "dial_default.bin")) {
         const struct disk_partition *dp;
         dp = disk_partition_find("dial_local");
-        assert(dp != NULL);
+        rte_assert(dp != NULL);
         file_dev.offset = dp->offset;
         file_dev.len = dp->len;
         file_dev.name = "dial_local";
@@ -477,24 +489,73 @@ static void* partition_open(const char *name) {
     return NULL;
 }
 
+static void partition_erase(struct file_partition *fp, uint32_t ofs, 
+    uint32_t max_size) {
+    size_t remain = fp->file_blksize - (ofs - fp->offset);
+    size_t bytes = rte_min(max_size, remain);
+    int err;
+
+    pr_dbg("@ erasing address(0x%08x) size(0x%x) ...\n", ofs, bytes);
+    err = disk_device_erase(fp->dd, ofs, bytes);
+    rte_assert(err == 0);
+    (void) err;
+    fp->dirty_offset += bytes;
+}
+
+static void* partition_open(const char *name, size_t fsize) {
+    struct file_partition *fp;
+
+    fp = __partition_open(name, fsize);
+    if (fp && fsize) {
+        size_t blksize;
+
+        rte_assert(fsize <= fp->len);
+        blksize = disk_device_get_block_size(fp->dd);
+        fp->file_size = fsize;
+        fp->file_blksize = RTE_ALIGN(fsize, blksize);
+        fp->max_erasesize = 128*1024;
+        fp->erase_mask = fp->max_erasesize - 1;
+        fp->dirty_offset = fp->offset;
+        fsize = fp->offset & fp->erase_mask;
+
+        if (fsize > 0) {
+            fsize = fp->max_erasesize - fsize;
+            pr_dbg("@the first erase size(0x%x) ...\n", fsize);
+            partition_erase(fp, fp->offset, fsize);
+        }
+    }
+    return fp;
+}
+
 static void partition_close(void *fp) {
     (void) fp;
-    blkdev_sync();
+    // blkdev_sync();
 }
 
 static int partition_write(void *fp, const void *buf, 
     size_t size, uint32_t offset) {
     struct file_partition *filp = fp;
-    uint32_t base;
+    uint32_t end_offset;
+    uint32_t wr_offset;
+    int err;
 
-    base = filp->offset + offset;
-    if (offset + size > filp->len) {
+    wr_offset  = filp->offset + offset;
+    end_offset = wr_offset + size;
+
+    if (end_offset > filp->offset + filp->file_size) {
         pr_err("write address is out of range(offset:0x%x size:%d "
                 "partition(name:%s ofs:0x%x, size:%d))\n",
             offset, size, filp->name, filp->offset, filp->len);
         return -EINVAL;
     }
-    return blkdev_write(filp->dd, buf, size, base);
+
+    while (end_offset > filp->dirty_offset)
+        partition_erase(filp, filp->dirty_offset, filp->max_erasesize);
+
+    err = disk_device_write(filp->dd, buf, size, wr_offset);
+    if (err < 0)
+        return err;
+    return size;
 }
 
 static int partition_data_copy(struct disk_device *dd, uint32_t dst, 
@@ -503,6 +564,8 @@ static int partition_data_copy(struct disk_device *dd, uint32_t dst,
 	uint32_t offset = 0;
     char buffer[1024];
     int ret;
+
+    pr_dbg("Copy partiton data ...\n");
 
     /* Flush disk cache */
     blkdev_sync();
@@ -540,7 +603,7 @@ static void partition_completed(int err, void *fp, const char *fname,
     size_t size) {
     int fid;
 
-    if (err)
+    if (err || ota_record_new)
         return;
 
     fid = partition_get_fid(fname);
@@ -561,7 +624,7 @@ static void partition_completed(int err, void *fp, const char *fname,
                 return;
             }
         }
-        assert(0);
+        rte_assert(0);
     }
 }
 
@@ -569,27 +632,27 @@ static bool check_ota_environment(const struct file_header *header) {
 #define GLOBAL_PARTITION_ADDR 0x1000
 #define GLOBAL_PARTITION_SIZE 1024
     char buffer[GLOBAL_PARTITION_SIZE];
-	struct disk_device *dd = NULL;
-	uint16_t crc;
+    struct disk_device *dd = NULL;
+    uint16_t crc;
 
     /*
-     * Skip partition check
-     */
+    * Skip partition check
+    */
     if (header->param == 0x0)
         return true;
 
-	disk_device_open("spi_flash", &dd);
-	assert(dd != NULL);
+    disk_device_open("spi_flash", &dd);
+    rte_assert(dd != NULL);
 
     disk_device_read(dd, buffer, sizeof(buffer), 
-        GLOBAL_PARTITION_ADDR);
+    GLOBAL_PARTITION_ADDR);
     crc = lib_crc16(buffer, sizeof(buffer));
     if (header->param != crc) {
         pr_err("Error***: firmware partition signature is 0x%04x\n", crc);
         return false;
     }
 
-	return true;
+    return true;
 }
 
 static int __rte_notrace ota_fstream_init(const struct device *dev) {

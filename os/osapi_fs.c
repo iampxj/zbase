@@ -20,7 +20,7 @@
 #define rte_unlikely(x) (x)
 #endif
 
-#ifndef CONFIG_VFS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_VFS_PARAM_CHECKER
 #define FD2VFS(fd, vfs, err) \
 	do { \
 		rte_assert(fd != NULL); \
@@ -145,7 +145,7 @@ int vfs_flush(os_file_t fd) {
 
 int vfs_getdents(os_file_t fd, struct dirent *dirp, size_t nbytes) {
 	struct file_class *vfs;
-#ifndef CONFIG_VFS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_VFS_PARAM_CHECKER
 	if (dirp == NULL)
 		return -EINVAL;
 #endif
@@ -197,7 +197,7 @@ int vfs_opendir(const char *path, VFS_DIR *dirp) {
 int vfs_readdir(VFS_DIR *dirp, struct vfs_dirent *dirent) {
 	struct file_class *vfs;
 
-#ifndef CONFIG_VFS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_VFS_PARAM_CHECKER
 	if (dirp == NULL || dirent == NULL)
 		return -EINVAL;
 #endif
@@ -212,7 +212,7 @@ int vfs_closedir(VFS_DIR *dirp) {
 	struct file_class *vfs;
 	int err;
 
-#ifndef CONFIG_VFS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_VFS_PARAM_CHECKER
 	if (dirp == NULL)
 		return -EINVAL;
 #endif
@@ -261,7 +261,7 @@ int vfs_mkdir(const char *path) {
 int vfs_unlink(const char *path) {
 	struct file_class *fp;
 
-#ifndef CONFIG_VFS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_VFS_PARAM_CHECKER
 	if (path == NULL)
 		return -EINVAL;
 #endif

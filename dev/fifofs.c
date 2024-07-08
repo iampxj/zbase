@@ -133,7 +133,7 @@ static int fifo_close(os_file_t fd) {
 
 static ssize_t fifo_read_block(os_file_t fd, void *buf, size_t count) {
     struct fifo_file *ff = (struct fifo_file *)fd;
-#ifndef CONFIG_FIFOFS_CHECKER_DISABLE
+#ifdef CONFIG_FIFOFS_PARAM_CHECKER
     if (rte_unlikely((ff->flags & VFS_O_MASK) == VFS_O_WRONLY))
         return -EOPNOTSUPP;
 #endif
@@ -154,7 +154,7 @@ static ssize_t fifo_read_block(os_file_t fd, void *buf, size_t count) {
 static ssize_t fifo_read_noblock(os_file_t fd, void *buf, size_t count) {
     struct fifo_file *ff = (struct fifo_file *)fd;
 
-#ifndef CONFIG_FIFOFS_CHECKER_DISABLE
+#ifdef CONFIG_FIFOFS_PARAM_CHECKER
     if (rte_unlikely((ff->flags & VFS_O_MASK) == VFS_O_WRONLY))
         return -EOPNOTSUPP;
 #endif
@@ -165,7 +165,7 @@ static ssize_t fifo_write_block(os_file_t fd, const void *buf, size_t count) {
     struct fifo_file *ff = (struct fifo_file *)fd;
     size_t size;
 
-#ifndef CONFIG_FIFOFS_CHECKER_DISABLE
+#ifdef CONFIG_FIFOFS_PARAM_CHECKER
     if (rte_unlikely((ff->flags & VFS_O_MASK) == VFS_O_RDONLY))
         return -EOPNOTSUPP;
 #endif
@@ -178,7 +178,7 @@ static ssize_t fifo_write_block(os_file_t fd, const void *buf, size_t count) {
 
 static ssize_t fifo_write_noblock(os_file_t fd, const void *buf, size_t count) {
     struct fifo_file *ff = (struct fifo_file *)fd;
-#ifndef CONFIG_FIFOFS_CHECKER_DISABLE
+#ifdef CONFIG_FIFOFS_PARAM_CHECKER
     if (rte_unlikely((ff->flags & VFS_O_MASK) == VFS_O_RDONLY))
         return -EOPNOTSUPP;
 #endif

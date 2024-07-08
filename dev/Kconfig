@@ -112,8 +112,12 @@ config MINOR_PT2_FILE
 
 endif #CUSTOM_PT_TABLE
 
-config FIFOFS_CHECKER_DISABLE
-    bool "Disable fifofs parameter checker"
-    default y
+config FIFOFS_PARAM_CHECKER
+    bool "Enable parameter checker for fifofs"
+    default n
+
+config DISK_PARAM_CHECKER
+    bool "Enable parameter checker for disk device"
+    default n
     
 endmenu

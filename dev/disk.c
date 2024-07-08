@@ -19,10 +19,6 @@
 #include "basework/dev/blkdev.h"
 #include "basework/os/osapi.h"
 
-#ifdef CONFIG_DISK_SAFEAPI
-#define USE_ARG_CHECKER
-#endif
-
 os_critical_global_declare
 static SLIST_HEAD(disk_list, disk_device) disk_head;
 
@@ -53,7 +49,7 @@ int disk_device_write(struct disk_device *dd, const void *buf, size_t size,
     rte_assert(dd != NULL);
     rte_assert(dd->write != NULL);
 
-#ifdef USE_ARG_CHECKER
+#ifdef CONFIG_DISK_PARAM_CHECKER
     if (rte_unlikely(buf == NULL))
         return -EINVAL;
 
@@ -65,7 +61,7 @@ int disk_device_write(struct disk_device *dd, const void *buf, size_t size,
             offset, size);
         return -EINVAL;
     }
-#endif /* USE_ARG_CHECKER */
+#endif /* CONFIG_DISK_PARAM_CHECKER */
     return dd->write(dd->dev, buf, size, offset);
 }
 
@@ -74,7 +70,7 @@ int disk_device_read(struct disk_device *dd, void *buf, size_t size,
     rte_assert(dd != NULL);
     rte_assert(dd->read != NULL);
 
-#ifdef USE_ARG_CHECKER
+#ifdef CONFIG_DISK_PARAM_CHECKER
     if (rte_unlikely(buf == NULL))
         return -EINVAL;
 
@@ -86,7 +82,7 @@ int disk_device_read(struct disk_device *dd, void *buf, size_t size,
             offset, size);
         return -EINVAL;
     }
-#endif /* USE_ARG_CHECKER */
+#endif /* CONFIG_DISK_PARAM_CHECKER */
 
     return dd->read(dd->dev, buf, size, offset);
 }
@@ -96,7 +92,7 @@ int disk_device_erase(struct disk_device *dd, long offset,
     rte_assert(dd != NULL);
     rte_assert(dd->erase != NULL);
 
-#ifdef USE_ARG_CHECKER
+#ifdef CONFIG_DISK_PARAM_CHECKER
     if (rte_unlikely(offset & (dd->blk_size - 1)))
         return -EINVAL;
 
@@ -111,7 +107,7 @@ int disk_device_erase(struct disk_device *dd, long offset,
             offset, size);
         return -EINVAL;
     }
-#endif /* USE_ARG_CHECKER */
+#endif /* CONFIG_DISK_PARAM_CHECKER */
 
     return dd->erase(dd->dev, offset, size);
 }

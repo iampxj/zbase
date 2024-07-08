@@ -122,7 +122,7 @@ static __rte_always_inline int
 iobus_submit(struct iobus_device *iodev, struct iobus_sqe sqes[], 
     size_t n) {
     struct iobus_sqe *seqs_tbl[8];
-#ifndef CONFIG_IOBUS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_IOBUS_PARAM_CHECKER
     rte_assert(iodev != NULL);
     rte_assert(sqes != NULL);
     rte_assert(n > 0 && n < 8);
@@ -137,7 +137,7 @@ iobus_submit(struct iobus_device *iodev, struct iobus_sqe sqes[],
 static __rte_always_inline int
 iobus_submit_async(struct iobus_device *iodev, struct iobus_sqe *sqe, 
     void (*done)(struct iobus_sqe *qe)) {
-#ifndef CONFIG_IOBUS_PARAM_CHECKER_DISABLE
+#ifdef CONFIG_IOBUS_PARAM_CHECKER
     rte_assert(iodev != NULL);
     rte_assert(sqe != NULL);
 #endif
