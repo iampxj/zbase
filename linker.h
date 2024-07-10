@@ -10,8 +10,17 @@
 extern "C" {
 #endif
 
-#define ROSET_SORTED_SECTION _XSTRING(.basework.roset)
-#define RWSET_SORTED_SECTION _XSTRING(.basework.rwset)
+#ifdef CONFIG_BASEWORK_ROSET
+#define ROSET_SORTED_SECTION CONFIG_BASEWORK_ROSET
+#else
+#define ROSET_SORTED_SECTION ".basework.roset"
+#endif /* CONFIG_BASEWORK_ROSET */
+
+#ifdef CONFIG_BASEWORK_RWSET
+#define RWSET_SORTED_SECTION CONFIG_BASEWORK_RWSET
+#else
+#define RWSET_SORTED_SECTION ".basework.rwset"
+#endif /* CONFIG_BASEWORK_RWSET */
 
 #ifndef _XSTRING
 #define _XSTRING(s) #s
@@ -19,49 +28,44 @@ extern "C" {
 
 #define LINKER_SET_BEGIN(set) _linker__set_##set##_begin
 #define LINKER_SET_END(set) _linker__set_##set##_end
-#define LINKER_SET_ALIGN(type) __aligned(sizeof(type))
+#define LINKER_SET_ALIGN(type) __rte_aligned(sizeof(type))
 
 /*
  * Readonly section
  */ 
 #define LINKER_ROSET(set, type) \
     LINKER_SET_ALIGN(type) type const LINKER_SET_BEGIN(set)[0] \
-    __section(ROSET_SORTED_SECTION "." #set ".begin") __used; \
+    __rte_section(ROSET_SORTED_SECTION "." #set ".begin") __rte_used; \
     LINKER_SET_ALIGN(type) type const LINKER_SET_END(set)[0] \
-    __section(ROSET_SORTED_SECTION "." #set ".end") __used
+    __rte_section(ROSET_SORTED_SECTION "." #set ".end") __rte_used
 
 #define LINKER_ROSET_ITEM_ORDERED(set, type, item, order) \
     LINKER_SET_ALIGN(type) type const _Linker__set_##set##_##item \
-    __section(ROSET_SORTED_SECTION "." #set ".content.0." _XSTRING(order)) __used\
+    __rte_section(ROSET_SORTED_SECTION "." #set ".content.0." _XSTRING(order)) __rte_used\
 
 /*
  * Read and write section
  */
 #define LINKER_RWSET(set, type) \
     LINKER_SET_ALIGN(type) type const LINKER_SET_BEGIN(set)[0] \
-    __section(RWSET_SORTED_SECTION "." #set ".begin") __used; \
+    __rte_section(RWSET_SORTED_SECTION "." #set ".begin") __rte_used; \
     LINKER_SET_ALIGN(type) type const LINKER_SET_END(set)[0] \
-    __section(RWSET_SORTED_SECTION "." #set ".end") __used
+    __rte_section(RWSET_SORTED_SECTION "." #set ".end") __rte_used
 
-#define RTEMS_LINKER_RWSET_ITEM_ORDERED( set, type, item, order ) \
+#define LINKER_RWSET_ITEM_ORDERED( set, type, item, order ) \
     LINKER_SET_ALIGN(type) type _Linker__set_##set##_##item \
-    __section(RWSET_SORTED_SECTION "." #set ".content.0." _XSTRING(order)) __used\
-
-
-static inline uintptr_t _linker_set_obfuscate(const void *ptr) {
-    uintptr_t addr = (uintptr_t) ptr;
-    __asm__ volatile("" : "+r" (addr));
-    return addr;
-}
+    __rte_section(RWSET_SORTED_SECTION "." #set ".content.0." _XSTRING(order)) __rte_used\
 
 /*
  * Foreach section
  */
 #define LINKER_SET_FOREACH(set, item) \
-    for (item = (void *)_linker_set_obfuscate(LINKER_SET_BEGIN(set)) ; \
-        item != LINKER_SET_END( set ) ; \
+    for (item = (void *)LINKER_SET_BEGIN(set); \
+        item != LINKER_SET_END( set ); \
         ++item \
     )
+
+
 #ifdef __cplusplus
 }
 #endif
