@@ -20,26 +20,33 @@ LINKER_ROSET(param, struct param_struct);
 
 static int 
 symbol_compare(const void *a, const void *b) {
-    return strcmp(a, b);
+    const struct param_struct *pa = a;
+    const struct param_struct *pb = b;
+    return strcmp(pa->name, pb->name);
 }
 
 int 
-rte_param_write(const struct param_struct *param, const void *pv) {
+rte_param_write(const struct param_struct *param, const void *pv, int type) {
     os_critical_declare
+    int ptype;
 
     if (param == NULL)
         return -EINVAL;
 
     if (!(param->flags & PARAM_WR))
+        return -EACCES;
+    
+    ptype = param->flags & PARAM_TYPEMASK;
+    if (type && type != ptype)
         return -EINVAL;
     
     os_critical_lock
-    switch (param->flags & PARAM_TYPEMASK) {
+    switch (ptype) {
     case PARAM_INT:
        *(int *)param->p = *(int *)pv;
         break;
     case PARAM_STRING:
-        strcpy((char *)param->p, (const char *)pv);
+        strcpy(*(char **)param->p, (const char *)pv);
         break;
     case PARAM_S64:
         *(int64_t *)param->p = *(int64_t *)pv;
@@ -94,13 +101,15 @@ rte_param_serach(const char *name) {
 void 
 rte_param_dump(void) {
     const struct param_struct *param;
+
+    pr_out("\n*** show parameters ***\n\n");
     LINKER_SET_FOREACH(param, param) {
         switch (param->flags & PARAM_TYPEMASK) {
         case PARAM_INT:
             dump_fmt(param, PRId32, *(int *)param->p);
             break;
         case PARAM_STRING:
-            dump_fmt(param, "s", (const char *)param->p);
+            dump_fmt(param, "s", *(const char **)param->p);
             break;
         case PARAM_S64:
             dump_fmt(param, PRId64, *(int64_t *)param->p);

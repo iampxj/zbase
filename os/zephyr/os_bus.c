@@ -7,7 +7,6 @@
 #include <device.h>
 #include <drivers/i2c.h>
 #include <drivers/spi.h>
-#include <sys/errno.h>
 
 #include "basework/os/osapi_bus.h"
 

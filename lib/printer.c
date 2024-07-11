@@ -33,13 +33,15 @@ struct printer *__log_disk_printer;
 
 struct printer* __log_default_printer;
 
-static int stdio_format(void* context, const char* fmt, va_list ap) {
+static int 
+stdio_format(void* context, const char* fmt, va_list ap) {
     (void)context;
     return vprintf(fmt, ap);
 }
 
 #ifndef _WIN32
-static void cqueue_put_char(int c, void *arg) {
+static void 
+cqueue_put_char(int c, void *arg) {
     struct queue_context *qc = arg;
     struct circ_buffer *ccb = &qc->ccb;
     int in = ccb->head;
@@ -50,12 +52,14 @@ static void cqueue_put_char(int c, void *arg) {
         ccb->tail++;
 }
 
-static int cqueue_format(void *context, const char *fmt, va_list ap) {
+static int 
+cqueue_format(void *context, const char *fmt, va_list ap) {
     return _IO_Vprintf(cqueue_put_char, context, fmt, ap);
 }
 
 #ifndef CONFIG_BOOTLOADER
-static void disklog_put_char(int c, void *arg) {
+static void 
+disklog_put_char(int c, void *arg) {
     struct disklog_context *dc = (struct disklog_context *)arg;
     int ptr = dc->ptr;
     dc->buffer[ptr] = (char)c;
@@ -66,7 +70,8 @@ static void disklog_put_char(int c, void *arg) {
     }
 }
 
-static int disklog_format(void *context, const char *fmt, va_list ap) {
+static int 
+disklog_format(void *context, const char *fmt, va_list ap) {
     struct disklog_context dc;
     int len;
     (void) context;
@@ -77,7 +82,8 @@ static int disklog_format(void *context, const char *fmt, va_list ap) {
     return len;
 }
 
-void __rte_notrace disklog_format_init(struct printer *pr) {
+void __rte_notrace 
+disklog_format_init(struct printer *pr) {
     assert(pr != NULL);
     pr->format = disklog_format;
     pr->context = NULL;
@@ -85,7 +91,8 @@ void __rte_notrace disklog_format_init(struct printer *pr) {
 }
 #endif /* CONFIG_BOOTLOADER */
 
-void __rte_notrace queue_format_init(struct printer* pr, void* buffer, size_t size) {
+void __rte_notrace 
+queue_format_init(struct printer* pr, void* buffer, size_t size) {
     assert(pr != NULL);
     assert(rte_powerof2(size));
     circ_buffer_reset(&queue_context.ccb);
@@ -96,7 +103,8 @@ void __rte_notrace queue_format_init(struct printer* pr, void* buffer, size_t si
 
 #endif /* _WIN32 */
 
-void __rte_notrace printf_format_init(struct printer *pr) {
+void __rte_notrace 
+printf_format_init(struct printer *pr) {
     assert(pr != NULL);
     pr->format = stdio_format;
     pr->context = NULL;

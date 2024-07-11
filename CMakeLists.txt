@@ -26,11 +26,10 @@ zephyr_library_compile_options(
 
 zephyr_library_sources_ifndef(CONFIG_BOOTLOADER 
     rq.c
+    log.c
     fsm.c
     async_call.c
-)
-zephyr_library_sources(
-    env.c
+    param.c
 )
 
 if (NOT CONFIG_BOOTLOADER)

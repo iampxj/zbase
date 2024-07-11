@@ -19,7 +19,6 @@
 #include "basework/malloc.h"
 #include "basework/log.h"
 #include "basework/utils/ota_fstream.h"
-#include "basework/env.h"
 #include "basework/lib/crc.h"
 
 struct extract_context {

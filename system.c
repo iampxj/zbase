@@ -13,7 +13,6 @@
 
 #include "basework/os/osapi.h"
 #include "basework/generic.h"
-#include "basework/env.h"
 #include "basework/dev/blkdev.h"
 #include "basework/log.h"
 

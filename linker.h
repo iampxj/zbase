@@ -10,6 +10,10 @@
 extern "C" {
 #endif
 
+/*
+ * KEEP(*(SORT_BY_NAME(.basework.roset*)))
+ */
+
 #ifdef CONFIG_BASEWORK_ROSET
 #define ROSET_SORTED_SECTION CONFIG_BASEWORK_ROSET
 #else
@@ -28,7 +32,7 @@ extern "C" {
 
 #define LINKER_SET_BEGIN(set) _linker__set_##set##_begin
 #define LINKER_SET_END(set) _linker__set_##set##_end
-#define LINKER_SET_ALIGN(type) __rte_aligned(sizeof(type))
+#define LINKER_SET_ALIGN(type) //__rte_aligned(sizeof(type))
 
 /*
  * Readonly section

@@ -32,7 +32,6 @@
 #include "basework/dev/disk.h"
 #include "basework/dev/partition.h"
 #include "basework/system.h"
-#include "basework/env.h"
 #include "board_cfg.h"
 
 // #define GMEM_DEBUG
@@ -565,7 +564,6 @@ os_platform_init(const struct device *dev __rte_unused) {
     if (rtc_dev)
         rtc_enable(rtc_dev);
 
-    env_init();
     platform_partition_init();
     disklog_format_init(&disk_printer);
     pr_disklog_init(&disk_printer);

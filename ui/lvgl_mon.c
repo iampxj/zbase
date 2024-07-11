@@ -12,7 +12,6 @@
 #include "basework/generic.h"
 #define __MON_DECLARE__
 #include "basework/mon.h"
-#include "basework/env.h"
 #include "src/core/lv_obj.h"
 
 

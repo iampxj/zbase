@@ -163,6 +163,31 @@ extern struct printer *__log_disk_printer;
  */
 // #define pr_crsi(fmt, ...) npr_emerg(__log_crsi_printer, fmt, ##__VA_ARGS__)
 
+
+/*
+ * rte_syslog - Prints a log with the specified priority
+ *
+ * @prio: log level
+ * @fmt: format information
+ */
+void rte_syslog(int prio, const char *fmt, ...);
+
+/*
+ * rte_syslog_set_level - Update log output priority
+ *
+ * @prio: log level
+ * return 0 if success
+ */
+int rte_syslog_set_level(int prio);
+
+/*
+ * rte_syslog_redirect - Redirect log printer
+ *
+ * @printer: Point to log printer
+ * return 0 if success
+ */
+int rte_syslog_redirect(struct printer *printer);
+
 /*
  * log_init - Initialize log component
  * @pr: default log printer
@@ -184,11 +209,11 @@ static inline int pr_log_init(struct printer *pr) {
 static inline int pr_disklog_init(struct printer *pr) {
     if (pr && pr->format) {
         __log_disk_printer = pr;
+        rte_syslog_redirect(pr);
         return 0;
     }
     return -1;
 }
-
 #ifdef __cplusplus
 }
 #endif
