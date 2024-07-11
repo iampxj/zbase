@@ -10,7 +10,6 @@
 #include <stdbool.h>
 #include <assert.h>
 
-#include "basework/os/osapi_config.h"
 #include "basework/compiler.h"
 
 #ifdef __cplusplus

@@ -7,7 +7,6 @@
 
 #include "basework/dev/ptfs.h"
 #include "basework/log.h"
-#include "basework/os/osapi_config.h"
 #include "basework/os/osapi_fs.h"
 
 #include "basework/ccinit.h"

@@ -1,6 +1,11 @@
 /*
  * Copyright 2022 wtcat
  */
+
+#ifdef CONFIG_HEADER_FILE
+#include CONFIG_HEADER_FILE
+#endif
+
 #define _VFS_PTFS_IMPLEMENT
 #include <assert.h>
 #include <errno.h>
@@ -8,7 +13,6 @@
 
 #include "basework/dev/ptfs_ext.h"
 #include "basework/log.h"
-#include "basework/os/osapi_config.h"
 #include "basework/os/osapi_fs.h"
 
 #include "basework/ccinit.h"

@@ -1,16 +1,23 @@
 /*
  * Copyright 2022 wtcat
  */
+
+#ifdef CONFIG_HEADER_FILE
+#include CONFIG_HEADER_FILE
+#endif
+
 #include <assert.h>
 
-#include "basework/os/osapi_config.h"
 #include "basework/os/osapi_timer.h"
 #include "basework/os/osapi_obj.h"
 #include "basework/lib/timer/timer_list.h"
 #include "basework/log.h"
-// #include "basework/rq.h"
 
 #include <thread>
+
+#ifndef CONFIG_OS_MAX_TIMERS
+#define CONFIG_OS_MAX_TIMERS 10
+#endif
 
 struct os_timer {
     struct timer_list timer;

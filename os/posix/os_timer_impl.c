@@ -3,6 +3,10 @@
  *
  * Timer implement for POSIX
  */
+ 
+#ifdef CONFIG_HEADER_FILE
+#include CONFIG_HEADER_FILE
+#endif
 
 #define pr_fmt(fmt) "os_timer: "fmt
 
@@ -11,7 +15,6 @@
 #include <string.h>
 #include <signal.h>
 
-#include "basework/os/osapi_config.h"
 #include "basework/os/osapi_timer.h"
 #include "basework/log.h"
 #include "basework/rq.h"

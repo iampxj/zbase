@@ -19,7 +19,6 @@
 #include "basework/dev/disk.h"
 #include "basework/dev/ptfs.h"
 #include "basework/generic.h"
-#include "basework/os/osapi_config.h"
 #include "basework/os/osapi_fs.h"
 #include "basework/log.h"
 #include "basework/malloc.h"

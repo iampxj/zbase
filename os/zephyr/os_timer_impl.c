@@ -20,7 +20,6 @@
 #include <sys/atomic.h>
 #include <drivers/hrtimer.h>
 
-#include "basework/os/osapi_config.h"
 #include "basework/os/osapi_timer.h"
 #include "basework/lib/timer/timer_list.h"
 #include "basework/log.h"

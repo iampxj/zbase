@@ -19,7 +19,6 @@
 #include "diskio.h"		/* FatFs lower layer API */
 #endif
 
-#include "basework/os/osapi_config.h"
 #include "basework/os/osapi_fs.h"
 #include "basework/os/osapi_timer.h"
 #include "basework/os/osapi_obj.h"

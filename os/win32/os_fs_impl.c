@@ -1,6 +1,11 @@
 /*
  * Copyright 2022 wtcat
  */
+
+#ifdef CONFIG_HEADER_FILE
+#include CONFIG_HEADER_FILE
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -10,7 +15,6 @@
 #include <windows.h>
 #endif
 
-#include "basework/os/osapi_config.h"
 #include "basework/os/osapi_fs.h"
 #include "basework/log.h"
 
@@ -18,6 +22,10 @@ struct file {
 	struct vfs_file super;
     FILE *fp;
 };
+
+#ifndef CONFIG_OS_MAX_FILES
+#define CONFIG_OS_MAX_FILES 20
+#endif
 
 static int cstd_fs_open(os_file_t fd, const char *path, 
     int flags, va_list ap) {
