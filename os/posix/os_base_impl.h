@@ -48,7 +48,7 @@ typedef sem_t os_completion_t;
 static inline int 
 __os_completion_timedwait(sem_t* sem, uint32_t ms) {
 	struct timespec ts;
-	timespec_get(&ts, TIME_UTC);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
 	ts.tv_sec += ms / 1000;
 	ts.tv_nsec += ms * 1000000;
 	return sem_timedwait(sem, &ts);

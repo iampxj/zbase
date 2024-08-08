@@ -211,6 +211,7 @@ typedef enum {
 	bcache_avl_gather_for_purge((_list), (_dd))
 #endif /* CONFIG_BCACHE_HASH_MAP */
 
+static void bcache_swapout_worker_task(void *arg);
 static void bcache_swapout_task(void *arg);
 static void bcache_read_ahead_task(void *arg);
 static void bcache_transfer_done(struct bcache_request *req, int status);
@@ -385,7 +386,7 @@ bcache_hash_remove(union bcache_tree *root, struct bcache_buffer *node) {
 static __rte_always_inline struct bcache_buffer *
 bcache_avl_search(union bcache_tree *avl, const struct bcache_device *dd,
 	bcache_num_t block) {
-	struct bcache_buffer *p = &avl->tree;
+	struct bcache_buffer *p = avl->tree;
 
 	while ((p != NULL) && ((p->dd != dd) || (p->block != block))) {
 		if (((uintptr_t)p->dd < (uintptr_t)dd) || 
@@ -853,7 +854,7 @@ bcache_wait(struct bcache_buffer *bd, struct bcache_waiters *waiters) {
  * Wake a blocked resource. The resource has a counter that lets us know if
  * there are any waiters.
  */
-static inline void 
+static __rte_always_inline void 
 bcache_wake(struct bcache_waiters *waiters) {
 	if (waiters->count > 0) 
 		os_cv_broadcast(&waiters->cond_var);
@@ -895,7 +896,7 @@ bcache_make_free_and_add_to_lru_list(struct bcache_buffer *bd) {
 	rte_list_add(&bd->link, &bdbuf_cache.lru);
 }
 
-static inline void 
+static __rte_always_inline void 
 bcache_make_empty(struct bcache_buffer *bd) {
 	bcache_set_state(bd, BCACHE_STATE_EMPTY);
 }
@@ -916,7 +917,8 @@ static void bcache_discard_buffer(struct bcache_buffer *bd) {
 
 static void 
 bcache_add_to_modified_list_after_access(struct bcache_buffer *bd) {
-	if (bdbuf_cache.sync_active && bdbuf_cache.sync_device == bd->dd) {
+	if (bdbuf_cache.sync_active && 
+		bdbuf_cache.sync_device == bd->dd) {
 		bcache_unlock_cache();
 
 		/*
@@ -1103,8 +1105,6 @@ static size_t bcache_swapout_worker_size(void) {
 		   (bdbuf_config.max_write_blocks * sizeof(struct bcache_sg_buffer));
 }
 
-static void bcache_swapout_worker_task(void * arg);
-
 static int bcache_swapout_workers_create(void) {
 	int sc = 0;
 	size_t w;
@@ -1218,7 +1218,8 @@ static int bcache_do_init(void) {
 	 */
 	for (b = 0, group = bdbuf_cache.groups, bd = bdbuf_cache.bds,
 		buffer = bdbuf_cache.buffers;
-		 b < bdbuf_cache.buffer_min_count; b++, bd++, buffer += bdbuf_config.buffer_min) {
+		 b < bdbuf_cache.buffer_min_count; 
+		 b++, bd++, buffer += bdbuf_config.buffer_min) {
 		bd->dd = BDBUF_INVALID_DEV;
 		bd->group = group;
 		bd->buffer = buffer;
@@ -1229,7 +1230,8 @@ static int bcache_do_init(void) {
 	}
 
 	for (b = 0, group = bdbuf_cache.groups, bd = bdbuf_cache.bds;
-		 b < bdbuf_cache.group_count; b++, group++, bd += bdbuf_cache.max_bds_per_group) {
+		 b < bdbuf_cache.group_count; 
+		 b++, group++, bd += bdbuf_cache.max_bds_per_group) {
 		group->bds_per_group = bdbuf_cache.max_bds_per_group;
 		group->bdbuf = bd;
 	}
@@ -1245,7 +1247,8 @@ static int bcache_do_init(void) {
 	bcache_swapout_transfer_init(bdbuf_cache.swapout_transfer, 
 		&bdbuf_cache.swapout_signal);
 	bdbuf_cache.swapout_enabled = true;
-	sc = bcache_create_task("swap-thread", bdbuf_config.swapout_priority,
+	sc = bcache_create_task("swap-thread", 
+							bdbuf_config.swapout_priority,
 							bcache_swapout_task,
 							(void *)bdbuf_cache.swapout_transfer,
 							&bdbuf_cache.swapout);
@@ -1262,7 +1265,8 @@ static int bcache_do_init(void) {
 	if (bdbuf_config.max_read_ahead_blocks > 0) {
 		bdbuf_cache.read_ahead_enabled = true;
 		os_completion_reinit(&bdbuf_cache.read_ahead);
-		sc = bcache_create_task("read-ahead", bdbuf_config.read_ahead_priority,
+		sc = bcache_create_task("read-ahead", 
+								bdbuf_config.read_ahead_priority,
 								bcache_read_ahead_task, NULL,
 								&bdbuf_cache.read_ahead_task);
 		if (sc != 0)
@@ -1314,7 +1318,7 @@ int bcache_init(void) {
 	return 0;
 }
 
-static void 
+static __rte_always_inline void 
 bcache_wait_for_access(struct bcache_buffer *bd) {
 	while (true) {
 		switch (bd->state) {
@@ -1420,7 +1424,7 @@ bcache_wait_for_sync_done(struct bcache_buffer *bd) {
 	}
 }
 
-static void 
+static __rte_always_inline void 
 bcache_wait_for_buffer(void) {
 	if (!rte_list_empty(&bdbuf_cache.modified))
 		bcache_wake_swapper();
@@ -1497,7 +1501,7 @@ bcache_get_buffer_for_access(struct bcache_device *dd, bcache_num_t block) {
 	return bd;
 }
 
-static inline int 
+static __rte_always_inline int 
 bcache_get_media_block(const struct bcache_device *dd, bcache_num_t block,
 	bcache_num_t *media_block_ptr) {
 	int sc = 0;
@@ -1739,7 +1743,7 @@ bcache_read_ahead_add_to_chain(struct bcache_device *dd) {
 	rte_list_add_tail(&dd->read_ahead.node, list);
 }
 
-static void 
+static __rte_always_inline void 
 bcache_check_read_ahead_trigger(struct bcache_device *dd, bcache_num_t block) {
 	if (bdbuf_cache.read_ahead_task != 0 && 
 		dd->read_ahead.trigger == block &&
@@ -1749,7 +1753,7 @@ bcache_check_read_ahead_trigger(struct bcache_device *dd, bcache_num_t block) {
 	}
 }
 
-static void 
+static __rte_always_inline void 
 bcache_set_read_ahead_trigger(struct bcache_device *dd, bcache_num_t block) {
 	if (dd->read_ahead.trigger != block) {
 		bcache_read_ahead_cancel(dd);
@@ -1827,7 +1831,7 @@ bcache_peek(struct bcache_device *dd, bcache_num_t block,
 #endif /* CONFIG_BCACHE_READ_AHEAD */
 }
 
-static int 
+static __rte_always_inline int 
 bcache_check_bd_and_lock_cache(struct bcache_buffer *bd, const char *kind) {
 	if (bd == NULL)
 		return -EINVAL;
@@ -2311,13 +2315,6 @@ static void bcache_swapout_workers_close(void) {
 	bcache_unlock_cache();
 }
 
-/**
- * Body of task which takes care on flushing modified buffers to the disk.
- *
- * @param arg A pointer to the global cache data. Use the global variable and
- *            not this.
- * @return void Not used.
- */
 static void bcache_swapout_task(void * arg) {
 	struct bcache_swapout_transfer *transfer = (struct bcache_swapout_transfer *)arg;
 	const uint32_t period_in_msecs = bdbuf_config.swapout_period;
@@ -2878,8 +2875,8 @@ const struct bcache_config bcache_configuration = {
 	.max_read_ahead_blocks = 0,
 	.max_write_blocks = 32, 
 	.swapout_priority = 10,
-	.swapout_period = 1000,
-	.swap_block_hold = 1000,
+	.swapout_period = 3000,
+	.swap_block_hold = 3000,
 	.swapout_workers = 1,
 	.swapout_worker_priority = 10,
 	.task_stack_size = 8192,
