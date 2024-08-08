@@ -57,13 +57,6 @@
 #define __rte_always_inline inline
 #endif
 
-/*
- * Bcache function configuration 
- */
-#define CONFIG_BCACHE_BLOCK_POWEROF2_MEDIA_SIZE
-#define CONFIG_BCACHE_HASH_MAP
-#define CONFIG_BCACHE_READ_AHEAD
-#define CONFIG_BCACHE_AVL_MAX_HEIGHT 16
 
 /*
  * Bcache hashmap 
@@ -155,7 +148,7 @@ struct bcache_cache {
 	struct bcache_swapout_transfer *swapout_transfer;
 	struct bcache_swapout_worker *swapout_workers;
 	size_t group_count;
-	bcache_group *groups;
+	struct bcache_group *groups;
 
 #ifdef CONFIG_BCACHE_READ_AHEAD
 	os_thread_t *read_ahead_task;
@@ -1009,7 +1002,7 @@ static void bcache_discard_buffer_after_access(struct bcache_buffer *bd) {
  * @return A buffer of this group.
  */
 static struct bcache_buffer *
-bcache_group_realloc(bcache_group *group, size_t new_bds_per_group) {
+bcache_group_realloc(struct bcache_group *group, size_t new_bds_per_group) {
 	struct bcache_buffer *bd;
 	size_t bufs_per_bd;
 	size_t b;
@@ -1148,7 +1141,7 @@ bcache_read_request_size(uint32_t transfer_count) {
 }
 
 static int bcache_do_init(void) {
-	bcache_group *group;
+	struct bcache_group *group;
 	struct bcache_buffer *bd;
 	uint8_t *buffer;
 	size_t b;
@@ -1195,14 +1188,16 @@ static int bcache_do_init(void) {
 	/*
 	 * Allocate the memory for the buffer descriptors.
 	 */
-	bdbuf_cache.bds = general_calloc(sizeof(struct bcache_buffer), bdbuf_cache.buffer_min_count);
+	bdbuf_cache.bds = general_calloc(sizeof(struct bcache_buffer), 
+		bdbuf_cache.buffer_min_count);
 	if (!bdbuf_cache.bds)
 		goto error;
 
 	/*
 	 * Allocate the memory for the buffer descriptors.
 	 */
-	bdbuf_cache.groups = general_calloc(sizeof(bcache_group), bdbuf_cache.group_count);
+	bdbuf_cache.groups = general_calloc(sizeof(struct bcache_group), 
+		bdbuf_cache.group_count);
 	if (!bdbuf_cache.groups)
 		goto error;
 
@@ -1492,7 +1487,6 @@ bcache_get_buffer_for_access(struct bcache_device *dd, bcache_num_t block) {
 			}
 		} else {
 			bd = bcache_get_buffer_from_lru_list(dd, block);
-
 			if (bd == NULL)
 				bcache_wait_for_buffer();
 		}
@@ -1780,6 +1774,7 @@ bcache_read(struct bcache_device *dd, bcache_num_t block,
 				block, (unsigned)dd->dev);
 
 		bd = bcache_get_buffer_for_access(dd, media_block);
+		
 		switch (bd->state) {
 		case BCACHE_STATE_CACHED:
 			++dd->stats.read_hits;
@@ -2152,7 +2147,6 @@ bcache_swapout_modified_processing(struct bcache_device **dd_ptr,
 
 					if (bd->block > tbd->block) {
 						__rte_list_add(node, tnode, tnode->next);
-						//rtems_chain_insert_unprotected(tnode, node);
 						node = NULL;
 					} else
 						tnode = tnode->prev;
@@ -2502,10 +2496,10 @@ bcache_set_block_size(struct bcache_device *dd, uint32_t block_size,
 			int block_to_media_block_shift = 0;
 			int block_size_shift = 0;
 
-			while ((1 << block_to_media_block_shift) < media_blocks_per_block)
+			while ((1ul << block_to_media_block_shift) < media_blocks_per_block)
 				++block_to_media_block_shift;
 
-			while ((1 << block_size_shift) < block_size)
+			while ((1ul << block_size_shift) < block_size)
 				++block_size_shift;
 
 #ifndef CONFIG_BCACHE_BLOCK_POWEROF2_MEDIA_SIZE
@@ -2859,6 +2853,9 @@ struct bcache_device*
 bcache_dev_find(const char* device) {
 	struct rte_list *pos;
 
+	if (device == NULL)
+		return NULL;
+
 	bcache_lock_cache();
 	rte_list_foreach(pos, &bdbuf_cache.dev_nodes) {
 		struct bcache_devnode *devn = rte_container_of(pos, 
@@ -2900,7 +2897,7 @@ struct ramdisk {
 static int 
 ramdisk_read(struct ramdisk *rd, struct bcache_request *req) {
 	struct bcache_sg_buffer *sg = req->bufs;
-	uint8_t *from = rd->area;
+	uint8_t *from = (uint8_t *)rd->area;
 
 	for (uint32_t i = 0; i < req->bufnum; i++, sg++) {
 		memcpy(sg->buffer, from + (sg->block * rd->block_size), sg->length);
@@ -2911,7 +2908,7 @@ ramdisk_read(struct ramdisk *rd, struct bcache_request *req) {
 
 static int 
 ramdisk_write(struct ramdisk *rd, struct bcache_request *req) {
-	uint8_t *to = rd->area;
+	uint8_t *to = (uint8_t *)rd->area;
 	struct bcache_sg_buffer *sg = req->bufs;
 
 	for (uint32_t i = 0; i < req->bufnum; i++, sg++) {
@@ -2976,7 +2973,7 @@ void ramdisk_test(void) {
 
 	for (size_t i = 0; i < count; i++) {
 		memset(buffer_512b, 0, sizeof(buffer_512b));
-		sprintf(buffer_512b, "bcache test text: %d\n", i);
+		sprintf(buffer_512b, "bcache test text: %d\n", (int)i);
 		bcache_dev_write(dd, buffer_512b, sizeof(buffer_512b), delta * i);
 	}
 

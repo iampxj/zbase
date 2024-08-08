@@ -25,6 +25,10 @@ extern "C" {
 
 typedef uint32_t bcache_num_t;
 struct bcache_request;
+struct bcache_device;
+struct bcache_stats;
+struct bcache_group;
+struct printer;
 
 /**
  * @brief Block device request done callback function type.
@@ -174,6 +178,9 @@ int bcache_dev_create(const char *device, uint32_t media_block_size,
 					  bcache_num_t media_block_count, bcache_device_ioctl handler,
 					  void *driver_data, struct bcache_device **dd);
 
+struct bcache_device* bcache_dev_find(const char* device);
+
+
 /**
  * @brief Prints the block device statistics.
  */
@@ -271,7 +278,9 @@ struct bcache_device {
 	void *driver_data;
 	bool deleted;
 	struct bcache_stats stats;
+#ifdef CONFIG_BCACHE_READ_AHEAD
 	struct bcache_read_ahead read_ahead;
+#endif
 };
 
 /**
@@ -436,12 +445,6 @@ typedef enum {
 } bcache_buf_state;
 
 /**
- * Forward reference to the block.
- */
-struct bcache_group;
-typedef struct bcache_group bcache_group;
-
-/**
  * To manage buffers we using buffer descriptors (BD). A BD holds a buffer plus
  * a range of other information related to managing the buffer in the cache. To
  * speed-up buffer lookup descriptors are organized in AVL-Tree. The fields
@@ -465,7 +468,7 @@ struct bcache_buffer {
 	unsigned char *buffer;
 	bcache_buf_state state;
 	uint32_t waiters;
-	bcache_group *group;
+	struct bcache_group *group;
 	uint32_t hold_timer;
 	int references;
 	void *user;
