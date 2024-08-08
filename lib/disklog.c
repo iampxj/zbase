@@ -2,14 +2,16 @@
  * Copyright 2022 wtcat
  */
 
+#include "basework/dev/blkdev.h"
 #ifdef CONFIG_HEADER_FILE
 #include CONFIG_HEADER_FILE
 #endif
 
-#include <assert.h>
+
 #include <stdbool.h>
 #include <errno.h>
 
+#include "basework/assert.h"
 #include "basework/dev/disk.h"
 #include "basework/dev/partition.h"
 #include "basework/dev/buffer_io.h"
@@ -35,7 +37,12 @@ struct disklog_ctx {
     struct disk_log file;
     os_mutex_t mtx;
     os_timer_t timer;
+#ifdef CONFIG_DISKLOG_BIO
     struct buffered_io *bio;
+#else
+    struct disk_device *dd;
+#endif /* CONFIG_DISKLOG_BIO */
+
     uint32_t offset;
     uint32_t len;
     size_t blksz;
@@ -43,7 +50,7 @@ struct disklog_ctx {
     bool upload_pending;
     bool read_locked;
     bool log_dirty;
-    bool panic;
+    bool should_stop;
 };
 
 
@@ -51,12 +58,15 @@ struct disklog_ctx {
 #define MIN(a, b) ((a) < (b)? (a): (b))
 #endif
 
+#ifndef CONFIG_DISLOG_SWAP_PERIOD
 #define DISLOG_SWAP_PERIOD (12 * 3600 * 1000ul) //12 hour
+#endif
 
-#define MTX_TRYLOCK() os_mtx_trylock(&logctx.mtx)
-#define MTX_LOCK()    os_mtx_lock(&logctx.mtx)
-#define MTX_UNLOCK()  os_mtx_unlock(&logctx.mtx)
-#define MTX_INIT()    os_mtx_init(&logctx.mtx, 0)
+#define MTX_LOCK_TIMED() os_mtx_timedlock(&logctx.mtx, 5000)
+#define MTX_TRYLOCK()    os_mtx_trylock(&logctx.mtx)
+#define MTX_LOCK()       os_mtx_lock(&logctx.mtx)
+#define MTX_UNLOCK()     os_mtx_unlock(&logctx.mtx)
+#define MTX_INIT()       os_mtx_init(&logctx.mtx, 0)
 
 
 static struct disklog_ctx logctx;
@@ -78,8 +88,8 @@ static void disklog_sync(bool wait) {
     if (logctx.log_dirty) {
     	int err;
     
-	    if (wait){
-	        err = MTX_LOCK();
+	    if (wait) {
+	        err = MTX_LOCK_TIMED();
 	    } else {
 	    	err = MTX_TRYLOCK();
 		}
@@ -99,6 +109,7 @@ static int disklog_sync_listen(struct observer_base *nb,
     (void) data;
     (void) nb;
     (void) action;
+    logctx.should_stop = true;
     disklog_sync(true);
     return 0;
 }
@@ -117,7 +128,8 @@ void disklog_reset(void) {
 }
 
 void disklog_flush(void) {
-	assert(logctx.bio != NULL);
+#ifdef CONFIG_DISKLOG_BIO
+	rte_assert(logctx.bio != NULL);
 	if (logctx.bio->panic) {
 		buffered_flush_locked(logctx.bio);
 		disk_device_erase(logctx.bio->dd, logctx.offset, logctx.blksz);
@@ -126,10 +138,16 @@ void disklog_flush(void) {
 	} else {
 	    int ret = buffered_write(logctx.bio, &logctx.file, 
 	        sizeof(logctx.file), logctx.offset);
-	    assert(ret > 0);
+	    rte_assert(ret > 0);
 	    (void) ret;
 		buffered_ioflush(logctx.bio, false);
 	}
+#else /* CONFIG_DISKLOG_BIO */
+    rte_assert(logctx.dd != NULL);
+    blkdev_write(logctx.dd, &logctx.file, sizeof(logctx.file),
+        logctx.offset);
+    blkdev_sync();
+#endif /* CONFIG_DISKLOG_BIO */
 }
 
 int disklog_init(void) {
@@ -143,23 +161,37 @@ int disklog_init(void) {
 
     MTX_INIT();
     dp_dev = disk_partition_find("syslog");
-    assert(dp_dev != NULL);
+    rte_assert(dp_dev != NULL);
     dd = disk_device_find_by_part(dp_dev);
 
     MTX_LOCK();
+#ifdef CONFIG_DISKLOG_BIO
     ret = buffered_iocreate(dd, dd->blk_size, false, &logctx.bio);
-    if (ret)
+    if (ret) {
+        rte_assert(0);
         goto _unlock;
+    }
+#else
+    logctx.dd = dd;
+#endif /* CONFIG_DISKLOG_BIO */
 
     lgpt_get_block_size(dp_dev, &logctx.blksz);
     logctx.offset = dp_dev->offset;
     logctx.len = dp_dev->len;
+
+#ifdef CONFIG_DISKLOG_BIO
     ret = buffered_read(logctx.bio, &logctx.file, 
         sizeof(logctx.file), logctx.offset);
+#else
+    ret = blkdev_read(logctx.dd, &logctx.file, 
+        sizeof(logctx.file), logctx.offset);
+#endif /* CONFIG_DISKLOG_BIO */
+
     if (ret < 0) {
         MTX_UNLOCK();
         pr_err("read disklog file failed(%d)\n", ret);
-        return ret;
+        rte_assert(0);
+        goto _unlock;
     }
     if (logctx.file.magic != DISKLOG_MAGIC)
         disklog_reset_locked();
@@ -183,7 +215,11 @@ _unlock:
 }
 
 int disklog_input(const char *buf, size_t size) {
+#ifdef CONFIG_DISKLOG_BIO
     struct buffered_io *bio;
+#else
+    struct disk_device *dd;
+#endif
     size_t remain = size;
     uint32_t wr_ofs, bytes;
     int ret;
@@ -191,10 +227,10 @@ int disklog_input(const char *buf, size_t size) {
     if (buf == NULL || size == 0)
         return -EINVAL;
 
-    if (logctx.read_locked){
+    if (logctx.read_locked) 
         return -EBUSY;
-	}
 
+#ifdef CONFIG_DISKLOG_BIO
 	bio = logctx.bio;
 	if (rte_likely(!bio->panic)) {
 	    ret = MTX_TRYLOCK();
@@ -204,13 +240,28 @@ int disklog_input(const char *buf, size_t size) {
 	        MTX_LOCK();
 	    }
 	}
+#else /* !CONFIG_DISKLOG_BIO */
+    dd = logctx.dd;
+    ret = MTX_TRYLOCK();
+    if (ret) {
+        if (logctx.upload_pending)
+            return -EBUSY;
+        MTX_LOCK();
+    }
+#endif /* CONFIG_DISKLOG_BIO */
 
     struct disk_log *filp = &logctx.file;
     wr_ofs = filp->wr_ofs;
+
     while (remain > 0) {
         bytes = MIN(filp->end - wr_ofs, remain);
+#ifdef CONFIG_DISKLOG_BIO
         ret = buffered_write(bio, buf, bytes, 
             logctx.offset + wr_ofs);
+#else
+        ret = blkdev_write(dd, buf, bytes, 
+            logctx.offset + wr_ofs);
+#endif /* CONFIG_DISKLOG_BIO */
         if (ret < 0) 
             goto _next;
         
@@ -230,8 +281,12 @@ int disklog_input(const char *buf, size_t size) {
 _next:
     filp->wr_ofs = wr_ofs;
 	logctx.log_dirty = true;
+#ifdef CONFIG_DISKLOG_BIO
 	if (rte_likely(!bio->panic))
     	MTX_UNLOCK();
+#else
+    MTX_UNLOCK();
+#endif /* CONFIG_DISKLOG_BIO */
     return ret;
 }
 
@@ -255,6 +310,7 @@ int disklog_ouput(bool (*output)(void *ctx, char *buf, size_t size),
     if (buffer == NULL)
         return -ENOMEM;
 
+    ret = 0;
     logctx.upload_pending = true;
     MTX_LOCK();
     struct disk_log *filp = &logctx.file;
@@ -262,10 +318,18 @@ int disklog_ouput(bool (*output)(void *ctx, char *buf, size_t size),
     size_t remain = size;
     rd_ofs = filp->rd_ofs;
     while (remain > 0) {
+        if (logctx.should_stop)
+            goto _next;
+
         bytes = MIN(filp->end - rd_ofs, remain);
         bytes = MIN(bytes, maxsize);
+#ifdef CONFIG_DISKLOG_BIO
         ret = buffered_read(logctx.bio, buffer, bytes, 
             logctx.offset + rd_ofs);
+#else
+        ret = blkdev_read(logctx.dd, buffer, bytes, 
+            logctx.offset + rd_ofs);
+#endif /* CONFIG_DISKLOG_BIO */
         if (ret <= 0)
             goto _next;
 		
@@ -313,8 +377,13 @@ ssize_t disklog_read(char *buffer, size_t maxlen, bool first) {
     rd_ofs = rdlog.rd_ofs;
     while (remain > 0) {
         bytes = MIN(rdlog.end - rd_ofs, remain);
+#ifdef CONFIG_DISKLOG_BIO
         ret = buffered_read(logctx.bio, buffer, bytes, 
             logctx.offset + rd_ofs);
+#else
+        ret = blkdev_read(logctx.dd, buffer, bytes, 
+            logctx.offset + rd_ofs);
+#endif /* CONFIG_DISKLOG_BIO */
         if (ret <= 0)
             goto _next;
 

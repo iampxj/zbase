@@ -49,10 +49,22 @@ enum scrmgr_state {
     SCRMGR_STATE_SUPER,
 };
 
-struct scrmgr_ops {
-    int  (*screen_set)(enum screen_state state, int brightness);
-    void (*state_switch)(enum scrmgr_state curr, enum scrmgr_state next);
+/* Screen event source */
+struct screen_eventsrc {
+    uint8_t active_src;
+    uint8_t deactive_src;
 
+#define SCREEN_EVSRC_OTHER    0
+#define SCREEN_EVSRC_TP       1
+#define SCREEN_EVSRC_KEY      2
+#define SCREEN_EVSRC_ALGO     3
+#define SCREEN_EVSRC_TIMER    4
+};
+
+struct scrmgr_ops {
+    int  (*screen_set)(const struct screen_eventsrc *src, 
+        enum screen_state state, uint8_t brightness);
+    void (*state_switch)(enum scrmgr_state curr, enum scrmgr_state next);
 };
 
 /*
@@ -88,14 +100,24 @@ bool is_screen_faded(void);
  * @sec: screen on timeout in seconds
  * return 0 if success
  */
-int screen_active(unsigned int sec);
+#define screen_active_ext(_sec, _reason) __screen_active(_sec, _reason)
+
+int __screen_active(unsigned int sec, unsigned int source);
+static inline int screen_active(unsigned int sec) {
+    return __screen_active(sec, SCREEN_EVSRC_OTHER);
+}
 
 /*
  * screen_deactive - Deactive screen display
  *
  * return 0 if success
  */
-int screen_deactive(void);
+#define screen_deactive_ext(_reason) __screen_deactive(_reason)
+    
+int __screen_deactive(unsigned int source);
+static inline int screen_deactive(void) {
+    return __screen_deactive(SCREEN_EVSRC_OTHER);
+}
 
 /*
  * screen_get_activetime - Get the time of screen activation

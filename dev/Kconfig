@@ -1,6 +1,31 @@
 
 menu "Block Device"
 
+menuconfig BCACHE
+    bool "Advanced block device I/O cache manager"
+    default n
+
+if BCACHE
+
+config BCACHE_BLOCK_POWEROF2_MEDIA_SIZE
+    bool "Logical block size is a multiple(power of 2) of disk block size"
+    default y
+
+config BCACHE_HASH_MAP
+    bool "Use hash-map container for cache manager"
+    default y
+
+config BCACHE_READ_AHEAD
+    bool "Enable read-ahead function for cache manager"
+    default n
+
+config BCACHE_AVL_MAX_HEIGHT
+    int "The maximum height for avl-tree"
+    default 16
+
+endif #BCACHE
+
+
 config DISK_SAFEAPI
     bool "Enable disk-operation API safe-checker"
     default y

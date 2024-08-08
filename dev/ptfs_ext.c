@@ -556,6 +556,7 @@ static void pt_file_sync(os_timer_t timer, void *arg) {
             ctx->dirty = false;
             ctx->p_inode->hcrc = file_checksum(ctx);
             PTFS_WRITE(ctx, ctx->p_inode, ctx->p_inode_size, ctx->offset);
+            PTFS_SYNC(ctx);
         }
         MTX_UNLOCK(ctx->mtx);
     }
@@ -694,7 +695,8 @@ int pt_file_init(struct ptfs_class *ctx, const char *name, uint32_t start,
     system_add_observer(&obs.base);
     if (ctx->p_inode->magic != MESSAGE_MAGIC || 
         ctx->p_inode->hcrc != file_checksum(ctx)) {
-        pr_warn("PTFS is invalid\n");
+        pr_warn("PTFS is invalid!(magic:0x%08x hcrc:0x%08x)\n", 
+            ctx->p_inode->magic, ctx->p_inode->hcrc);
         pt_file_reset(ctx);
     }
 	

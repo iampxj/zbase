@@ -5,4 +5,12 @@ config MSG_STORAGE_CHECKSUM
     bool "Enable message checksum"
     default n
 
+config DISKLOG_BIO
+    bool "Enable buffered i/o for disklog"
+    default y
+
+config DISKLOG_SWAP_PERIOD
+    int "Disk log swap period in milliseconds"
+    default 43200000
+
 endmenu

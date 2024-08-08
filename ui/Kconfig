@@ -17,4 +17,13 @@ config LVGL_LAZYDECOMP_AUXMEM
 	depends on LVGL_LAZY_DECOMP
 	default n
 
+config LAZYCACHE_ALIGN_SIZE
+	int "LazyCache memory aligned size"
+	range 4 128
+	default 64
+
+config LAZYCACHE_MAX_NODES
+	int "Maximum cache node for lazycache"
+	default 64
+
 endif #BASEWORK_UI

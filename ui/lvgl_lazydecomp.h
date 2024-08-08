@@ -38,6 +38,7 @@ struct lazy_cache_statistics {
 	uint16_t cache_misses;
 	uint16_t cache_resets;
 	uint16_t node_misses;
+	uint32_t main_freespace;
 };
 
 struct aux_memarea {

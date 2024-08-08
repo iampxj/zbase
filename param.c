@@ -13,73 +13,71 @@
 
 
 #define dump_fmt(param, fmt, ...) \
-    pr_out("%s: %" fmt "\n", param->name, ##__VA_ARGS__) 
+    pr_out("%s = %" fmt "\n", param->name, ##__VA_ARGS__) 
 
 os_critical_global_declare
 LINKER_ROSET(param, struct param_struct);
 
 static int 
 symbol_compare(const void *a, const void *b) {
-    const struct param_struct *pa = a;
+    const char *pa = (const char *)a;
     const struct param_struct *pb = b;
-    return strcmp(pa->name, pb->name);
+
+    return strcmp(pa, pb->name);
 }
 
 int 
-rte_param_write(const struct param_struct *param, const void *pv, int type) {
+rte_param_write(const struct param_struct *param, int64_t pv) {
     os_critical_declare
-    int ptype;
 
     if (param == NULL)
         return -EINVAL;
 
-    if (!(param->flags & PARAM_WR))
+    if (param->flags & PARAM_RO)
         return -EACCES;
     
-    ptype = param->flags & PARAM_TYPEMASK;
-    if (type && type != ptype)
-        return -EINVAL;
-    
     os_critical_lock
-    switch (ptype) {
+    switch (param->flags & PARAM_TYPEMASK) {
+    case PARAM_POINTER:
+        *(void **)param->p = (void *)(uintptr_t)pv;
     case PARAM_INT:
-       *(int *)param->p = *(int *)pv;
+        *(int *)param->p = (int)pv;
         break;
     case PARAM_STRING:
-        strcpy(*(char **)param->p, (const char *)pv);
+        strcpy(*(char **)param->p, (const char *)(uintptr_t)pv);
         break;
     case PARAM_S64:
-        *(int64_t *)param->p = *(int64_t *)pv;
+        *(int64_t *)param->p = (int64_t)pv;
         break;
     case PARAM_UINT:
-        *(unsigned int *)param->p = *(unsigned int *)pv;
+        *(unsigned int *)param->p = (unsigned int)pv;
         break;
     case PARAM_LONG:
-        *(long *)param->p = *(long *)pv;
+        *(long *)param->p = (long)pv;
         break;
     case PARAM_ULONG:
-        *(unsigned long *)param->p = *(unsigned long *)pv;
+        *(unsigned long *)param->p = (unsigned long)pv;
         break;
     case PARAM_U64:
-        *(uint64_t *)param->p = *(uint64_t *)pv;
+        *(uint64_t *)param->p = (uint64_t)pv;
         break; 
     case PARAM_U8:
-        *(uint8_t *)param->p = *(uint8_t *)pv;
+        *(uint8_t *)param->p = (uint8_t)pv;
         break; 
     case PARAM_U16:
-        *(uint16_t *)param->p = *(uint16_t *)pv;
+        *(uint16_t *)param->p = (uint16_t)pv;
         break; 
     case PARAM_S8:
-        *(int8_t *)param->p = *(int8_t *)pv;
+        *(int8_t *)param->p = (int8_t)pv;
         break; 
     case PARAM_S16:
-        *(int16_t *)param->p = *(int16_t *)pv;
+        *(int16_t *)param->p = (int16_t)pv;
         break; 
     case PARAM_S32:
-        *(int32_t *)param->p = *(int32_t *)pv;
+        *(int32_t *)param->p = (int32_t)pv;
         break; 
     case PARAM_U32:
-        *(uint32_t *)param->p = *(uint32_t *)pv;
+        *(uint32_t *)param->p = (uint32_t)pv;
         break;
     default:
         os_critical_unlock
@@ -105,6 +103,9 @@ rte_param_dump(void) {
     pr_out("\n*** show parameters ***\n\n");
     LINKER_SET_FOREACH(param, param) {
         switch (param->flags & PARAM_TYPEMASK) {
+        case PARAM_POINTER: 
+            dump_fmt(param, "p", *(void **)param->p);
+            break;
         case PARAM_INT:
             dump_fmt(param, PRId32, *(int *)param->p);
             break;

@@ -35,6 +35,8 @@ enum iobus_type {
 struct iobus_sq;
 struct iobus_device;
 
+typedef void (*iobus_notify_fn)(const struct iobus_device *iod, int state);
+
 struct i2c_param {
     const void *txbuf;
     void *rxbuf;
@@ -53,7 +55,7 @@ struct iobus_device {
     char name[32];
     struct iobus_sq *sq;
     void *dev;
-    void (*notify)(const struct iobus_device *iod, int dstate);
+    iobus_notify_fn notify;
 #define IOBUS_DEVSTATE_SUSPEND 0
 #define IOBUS_DEVSTATE_RESUME  1
     IOBUS_DEVICE_USER_EXTENSION
@@ -62,12 +64,11 @@ struct iobus_device {
 struct iobus_sqe {
     /* Bus operation code */
     uint32_t  op;
-#define IOBUS_I2C_WRITEREAD  0
-#define IOBUS_I2C_WRITE      1
-#define IOBUS_I2C_READ       2
-#define IOBUS_SPI_TRANSFER   3
-#define IOBUS_SPI_WRITE      4
-#define IOBUS_SPI_READ       5
+#define IOBUS_TRANSFER   0
+#define IOBUS_WRITE      1
+#define IOBUS_READ       2
+#define IOBUS_CONTROL    3
+#define IOBUS_DONE       4
 
     union {
         struct i2c_param i2c;
@@ -116,6 +117,7 @@ int __iobus_burst_submit(struct iobus_sq *sq, struct iobus_sqe **sqes,
 int iobus_burst_submit_wait(struct iobus_device *iodev, 
     struct iobus_sqe **sqes, size_t n);
 int iobus_register_llops(struct iobus_llops *ops);
+int iobus_register_notify(struct iobus_device *iodev, iobus_notify_fn notify);
 void iobus_dump(void);
 
 static __rte_always_inline int 

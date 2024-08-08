@@ -16,9 +16,13 @@
 #include "basework/ui/lvgl_lazydecomp.h"
 
 #ifdef CONFIG_LAZYCACHE_MAX_NODES
-#define MAX_IMAGE_NODES CONFIG_LAZYCACHE_MAX_NODES
+#define MAX_CACHE_NODES CONFIG_LAZYCACHE_MAX_NODES
 #else
-#define MAX_IMAGE_NODES 32
+#define MAX_CACHE_NODES 64
+#endif
+
+#ifndef CONFIG_LAZYCACHE_ALIGN_SIZE
+#define CONFIG_LAZYCACHE_ALIGN_SIZE 64
 #endif
 
 #ifndef __rte_always_inline
@@ -27,8 +31,8 @@
 #define STATIC_INLINE static __rte_always_inline
 #endif
 
-#define CACHE_ALIGNED   64
-#define CACHE_LIMIT(n)  (size_t)(((uintptr_t)(n) * 9) / 10)
+#define CACHE_ALIGNED   CONFIG_LAZYCACHE_ALIGN_SIZE
+#define CACHE_LIMIT(n)  (size_t)(((n) * 9) / 10)
 
 #define ALIGNED_UP_ADD(p, size, align) \
 	(char *)(((uintptr_t)p + size + align - 1) & ~(align - 1))
@@ -63,7 +67,7 @@ struct lazy_cache {
 #define KEY_HASH(key) (((uintptr_t)(key) ^ ((uintptr_t)(key) >> 8)) & HASH_MASK)
 	struct rte_list   lru;
 	struct rte_hlist  slots[HASH_SIZE];
-	struct image_node inodes[MAX_IMAGE_NODES];
+	struct image_node inodes[MAX_CACHE_NODES];
 	size_t            cache_limited;
 	uint16_t          policy;
 	uint16_t          cache_hits;
@@ -94,12 +98,13 @@ struct lazy_cache {
 
 static struct lazy_cache cache_controller;
 
-
+#ifdef CONFIG_LVGL_LAZYDECOMP_AUXMEM
 STATIC_INLINE void aux_mempool_reset(struct aux_mempool *aux) {
 	for (uint16_t i = 0; i < aux->count; i++)
 		aux->slots[i].freeptr = aux->slots[i].start;
 	aux->avalible_idx = 0;
 }
+#endif
 
 STATIC_INLINE void cache_mempool_init(struct cache_mempool *pool, void *area, 
 	size_t size, void (*release)(void *p)) {		 
@@ -172,7 +177,7 @@ static void lazy_cache_reset(struct lazy_cache *cache) {
 #endif
 
 		char *p = (char *)cache->inodes;
-		for (size_t i = 0; i < MAX_IMAGE_NODES; i++) {
+		for (size_t i = 0; i < MAX_CACHE_NODES; i++) {
 			*(char **)p = cache->first_avalible;
 			cache->first_avalible = p;
 			p += sizeof(struct image_node);
@@ -490,10 +495,12 @@ int lazy_cache_get_information(struct lazy_cache_statistics* sta) {
 	if (sta == NULL)
 		return -EINVAL;
 
-	sta->cache_hits   = cache->cache_hits;
-	sta->cache_misses = cache->cache_misses;
-	sta->cache_resets = cache->cache_resets;
-	sta->node_misses  = cache->node_misses;
+	sta->cache_hits     = cache->cache_hits;
+	sta->cache_misses   = cache->cache_misses;
+	sta->cache_resets   = cache->cache_resets;
+	sta->node_misses    = cache->node_misses;
+	sta->main_freespace =
+		(uintptr_t)cache->main_mempool.end - (uintptr_t)cache->main_mempool.freeptr;
 
 	return 0;
 }

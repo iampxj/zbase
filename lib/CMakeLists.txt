@@ -12,7 +12,6 @@ zephyr_library_sources(
 )
 
 if (NOT CONFIG_BOOTLOADER)
-    add_subdirectory(cfgfile)
     zephyr_library_sources(
         ${CMAKE_CURRENT_SOURCE_DIR}/msg_storage.c
         ${CMAKE_CURRENT_SOURCE_DIR}/msg_partition_backend.c

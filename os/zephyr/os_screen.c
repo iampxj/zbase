@@ -123,7 +123,7 @@ static void timer_cb(os_timer_t timer, void *arg) {
 #if USE_SCREEN_COVER
 	if (!m_cover_status) {
     	pr_dbg("##tp active screen\n");
-    	screen_active(SCREEN_ON_DEFAULT);
+    	screen_active_ext(SCREEN_ON_DEFAULT, SCREEN_EVSRC_TP);
 	} else {
 		m_cover_status = false;
 		//screen_deactive();
@@ -154,7 +154,7 @@ static void tp_notify(struct device *dev, struct input_value *val) {
         os_timer_mod(timer, 50);
 }
 
-static void tpscr_pm_control(bool lowerpower) {
+static void tpscr_pm_control(bool lowerpower, uint8_t wksrc) {
     if (!midsuper_on)
         return;
 		
@@ -164,10 +164,13 @@ static void tpscr_pm_control(bool lowerpower) {
     } else {
         // display_composer_control(0, "exit");
         input_dev_control(tp_dev, 0, "exit");
+        if (wksrc != 0)
+            input_dev_control(tp_dev, wksrc, NULL);
     }
 }
 
-static int screen_sleep_set(enum screen_state state, int brightness) {
+static int screen_sleep_set(const struct screen_eventsrc *src, 
+    enum screen_state state, uint8_t brightness) {
     struct screen_param sp;
 
     sp.brightness = brightness;
@@ -180,7 +183,7 @@ static int screen_sleep_set(enum screen_state state, int brightness) {
             sleep_timestamp = os_timer_gettime();
 #endif
             screen_manager_notify_locked(SCREEN_NOTIF_ON, &sp);
-            tpscr_pm_control(false);
+            tpscr_pm_control(false, src->active_src);
         }
 #ifdef CONFIG_FADE_LOW_POWER
         if (midsuper_on) {
@@ -205,7 +208,7 @@ static int screen_sleep_set(enum screen_state state, int brightness) {
             system_standby_set_fade(true, 
                 STANDBY_TIMEOUT + STADNBY_EXTRA_DELAY);
 #endif
-            tpscr_pm_control(true);
+            tpscr_pm_control(true, src->deactive_src);
             screen_manager_notify_locked(SCREEN_NOTIF_OFF, &sp);
             mid_brightness = sp.brightness;
         }
@@ -261,7 +264,7 @@ static void state_switch(enum scrmgr_state curr, enum scrmgr_state next) {
 #ifdef CONFIG_FADE_LOW_POWER
         system_standby_register_ops(NULL);
 #endif
-        tpscr_pm_control(false);
+        tpscr_pm_control(false, 0);
         midsuper_on = false;
         return;
     }

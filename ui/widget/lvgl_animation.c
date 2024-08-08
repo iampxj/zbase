@@ -196,7 +196,7 @@ void animation_stop(lv_obj_t *obj)
 		lv_anim_del(NULL, animation_exec_cb);
 
 		/* Destory loader */
-		lvgl_img_loader_destroy(&animimg->loader);
+		//lvgl_img_loader_destroy(&animimg->loader);
 	}
 }
 
@@ -226,6 +226,11 @@ static void animation_constructor(const lv_obj_class_t * class_p, lv_obj_t * obj
 
 static void animation_destructor(const lv_obj_class_t * class_p, lv_obj_t * obj)
 {
+	animation_t *animimg = (animation_t *)obj;
+
+	/* Destory loader */
+	lvgl_img_loader_destroy(&animimg->loader);
+
 	animation_clean(obj);
 }
 

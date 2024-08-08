@@ -192,7 +192,7 @@ static int __rte_unused ptfs_impl_register(const struct device *dev) {
     (void) dev;
 
     const struct partition_entry *parti;
-    parti = partition_get_stf_part(STORAGE_ID_NOR, PARTITION_FILE_ID_UDISK);
+    parti = parition_get_entry2(STORAGE_ID_NOR, PARTITION_FILE_ID_UDISK);
     if (!parti) {
         pr_err("Not found udisk parition\n");
         return -ENOENT;
@@ -207,7 +207,11 @@ static int __rte_unused ptfs_impl_register(const struct device *dev) {
 
     memset(os_files, 0, sizeof(os_files));
     memset(&ptfs_context, 0, sizeof(ptfs_context));
+#ifdef CONFIG_SPINAND_ACTS
+    err = ptfile_ll_init(PTFS, CONFIG_BLOCK_DEV_FLASH_NAME, offset);
+#else
     err = ptfile_ll_init(PTFS, CONFIG_SPI_FLASH_NAME, offset);
+#endif
     if (err)
         return err;
     pr_notice("## partition filesystem registed start(0x%x) size(%d)\n", 

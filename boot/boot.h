@@ -72,6 +72,8 @@ struct fwpkg_record {
  * @notify: the callback that the update progress of firmware
  */
 int general_boot(
+    const char *ddev,
+    const char *sdev,
     uint32_t media_start,
     uint32_t media_size,
     void (*boot)(void), 

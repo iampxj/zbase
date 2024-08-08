@@ -19,6 +19,12 @@
 #include "basework/dev/ptfs_ext.h"
 #include "basework/log.h"
 
+#ifdef CONFIG_SPINAND_ACTS
+#define PTFS_STORAGE_MEDIA CONFIG_SPINAND_FLASH_NAME
+#else
+#define PTFS_STORAGE_MEDIA CONFIG_SPI_FLASH_NAME
+#endif
+
 struct parition_data {
     uint32_t start;
     uint32_t size;
@@ -36,7 +42,7 @@ static int global_partiton_find(const char *name, int file_id,
     }
 
     const struct partition_entry *parti;
-    parti = partition_get_stf_part(STORAGE_ID_NOR, (uint8_t)file_id);
+    parti = parition_get_entry2(STORAGE_ID_NOR, (uint8_t)file_id);
     if (!parti) {
         pr_err("Not found global parition\n");
         return -ENOENT;
@@ -91,7 +97,7 @@ static int global_partiton_find(const char *name, int file_id,
     static int RTE_JOIN(name, _ptfs_register)(const struct device *dev) {   \
         struct parition_data pt;                                                \
         if (!global_partiton_find(ptname, fileid, &pt)) {                       \
-            int err = pt_file_init(&RTE_JOIN(name, _pt_context), CONFIG_SPI_FLASH_NAME, \
+            int err = pt_file_init(&RTE_JOIN(name, _pt_context), PTFS_STORAGE_MEDIA, \
                 pt.start, pt.size, 4096, maxfiles, maxlimit, bio);              \
             if (err) {                                                          \
                 pr_err("PT filesystem initialize failed(%d)\n", err);           \
@@ -104,7 +110,9 @@ static int global_partiton_find(const char *name, int file_id,
     }                                                                           \
     SYS_INIT(RTE_JOIN(name, _ptfs_register), APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
         
-// PTFS_DEFINED(workout, 20, "/PTa:", "workout", 0, 20*1024)
+// PTFS_DEFINED(workout, 2, "/PTa:", "workout", 0, 8*1024, true)
 
+#ifdef CONFIG_PTFILE_MOUNT_HEADER
 #include CONFIG_PTFILE_MOUNT_HEADER
+#endif
 #endif /* CONFIG_PTFILE_MOUNT_TABLE */

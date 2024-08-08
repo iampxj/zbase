@@ -9,7 +9,7 @@
 #endif
 
 #define pr_fmt(fmt) "os_platform: " fmt
-//#define CONFIG_LOGLEVEL LOGLEVEL_DEBUG
+#define CONFIG_LOGLEVEL LOGLEVEL_DEBUG
 #include <errno.h>
 #include <assert.h>
 #include <string.h>
@@ -149,7 +149,7 @@ SYS_INIT(_gmem_monitor_init, PRE_KERNEL_1, 50);
 # define TRACER_REMOVE(...) (void)0
 #endif /* GMEM_DEBUG */
 
-static const struct device *rtc_dev;
+static const struct device *rtc_dev __rte_unused;
 
 /*
  * Memory allocate implement
@@ -342,7 +342,9 @@ static int __rte_unused __rte_notrace platform_flash_init(void) {
     const char *devnames[] = {
         CONFIG_SPI_FLASH_NAME,
         CONFIG_SPI_FLASH_1_NAME,
-        CONFIG_SPI_FLASH_2_NAME
+        CONFIG_SPI_FLASH_2_NAME,
+        CONFIG_SPINAND_FLASH_NAME,
+        CONFIG_BLOCK_DEV_FLASH_NAME
     };
     
     for (int i = 0; i < ARRAY_SIZE(devnames); i++) {
@@ -351,6 +353,7 @@ static int __rte_unused __rte_notrace platform_flash_init(void) {
         if (zdev) {
             api = (const struct flash_driver_api *)zdev->api;
             __ASSERT_NO_MSG(api->page_layout != NULL);
+            pr_dbg("%s: layout(%p)\n", zdev->name, api->page_layout);
             api->page_layout(zdev, &layout, NULL);
 
             dd = general_calloc(1, sizeof(*dd));
@@ -415,7 +418,7 @@ static void __rte_unused __rte_notrace partition_iterator(const char *name, uint
         pt->parent = "sd";
         break;
     case STORAGE_ID_NAND:
-        pt->parent = "spinand";
+        pt->parent = CONFIG_SPINAND_FLASH_NAME;
         break;
     default:
         pr_err("invalid partition (%s)\n", name);

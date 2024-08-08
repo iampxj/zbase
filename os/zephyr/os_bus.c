@@ -15,17 +15,20 @@ static void spi_bus_transfer(struct iobus_sqe *sqe) {
     const struct device *spi_bus = sqe->dd;
 
     switch (sqe->op) {
-    case IOBUS_SPI_TRANSFER:
+    case IOBUS_TRANSFER:
         sqe->result = spi_transceive(spi_bus, ip->param, 
             ip->tx_param, ip->rx_param);
         break;
-    case IOBUS_SPI_WRITE:
+    case IOBUS_WRITE:
         sqe->result = spi_write(spi_bus, ip->param, 
             ip->tx_param);
         break;
-    case IOBUS_SPI_READ:
+    case IOBUS_READ:
         sqe->result = spi_read(spi_bus, ip->param, 
             ip->rx_param);
+        break;
+    case IOBUS_DONE:
+        sqe->result = 0;
         break;
     default:
         pr_err("Error***: iobus-spi invalid opcode(%d)\n", sqe->op);
@@ -42,17 +45,20 @@ static void i2c_bus_transfer(struct iobus_sqe *sqe) {
     const struct device *i2c_bus = sqe->dd;
 
     switch (sqe->op) {
-    case IOBUS_I2C_WRITEREAD:
+    case IOBUS_TRANSFER:
         sqe->result = i2c_write_read(i2c_bus, ip->addr, ip->txbuf, 
             ip->txlen, ip->rxbuf, ip->rxlen);
         break;
-    case IOBUS_I2C_WRITE:
+    case IOBUS_WRITE:
         sqe->result = i2c_write(i2c_bus, ip->txbuf, 
             ip->txlen, ip->addr);
         break;
-    case IOBUS_I2C_READ:
+    case IOBUS_READ:
         sqe->result = i2c_read(i2c_bus, ip->rxbuf, 
             ip->rxlen, ip->addr);
+        break;
+    case IOBUS_DONE:
+        sqe->result = 0;
         break;
     default:
         pr_err("Error***: iobus-i2c invalid opcode(%d)\n", sqe->op);

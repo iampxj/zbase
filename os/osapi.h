@@ -49,6 +49,9 @@ extern "C"{
 #ifndef os_completion_wait
 #define os_completion_wait(_proc)   (void)(_proc)
 #endif
+#ifndef os_completion_timedwait
+#define os_completion_timedwait(_proc, _timeout) (void)(_proc)
+#endif
 #ifndef os_completed
 #define os_completed(_proc)         (void)(_proc)
 #endif
@@ -173,7 +176,7 @@ OS_MTX_API int _os_mtx_trylock(os_mutex_t *mtx);
  */
 #ifndef os_cv_init
 #define os_cv_init(cv, data) \
-    _os_cv_init(dv, data)
+    _os_cv_init(cv, data)
 OS_CV_API int _os_cv_init(os_cond_t *cv, void *data);
 #endif
 

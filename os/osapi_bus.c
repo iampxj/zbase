@@ -120,6 +120,10 @@ iobus_find_llops(enum iobus_type type) {
 int 
 iobus_create(const char *buses[], enum iobus_type type, int qsize, 
     int prio, void *stack, int stacksize) {
+    const char *busclass[] = {
+        [K_IOBUS_I2C] = "i2c",
+        [K_IOBUS_SPI] = "spi"
+    };
     struct iobus_device *iodev;
     struct iobus_llops *io;
     struct iobus_sq *sq;
@@ -171,7 +175,7 @@ iobus_create(const char *buses[], enum iobus_type type, int qsize,
 
     rte_atomic32_init(&sq->refcnt);
     os_completion_reinit(&sq->completion);
-    snprintf(sq->name, sizeof(sq->name), "iobus-%d", iobus_id);
+    snprintf(sq->name, sizeof(sq->name), "iobus@%s-%d", busclass[type], iobus_id);
     err = os_thread_spawn(&sq->thread, sq->name, stack, 
         stacksize, prio, iobus_daemon, sq);
     if (err) {
@@ -249,7 +253,16 @@ __iobus_burst_submit(struct iobus_sq *sq, struct iobus_sqe **sqes,
 static void 
 iobus_done(struct iobus_sqe *sqe) {
     os_completed(sqe->arg);
-} 
+}
+
+static void
+iobus_attach_done(struct iobus_sqe *sqe) {
+    struct iobus_device *iodev = sqe->dd;
+    void **p = (void **)sqe->arg;
+
+    iodev->notify = (iobus_notify_fn)p[1];
+    os_completed(p[0]);
+}
 
 int 
 iobus_burst_submit_wait(struct iobus_device *iodev, struct iobus_sqe **sqes, 
@@ -262,6 +275,30 @@ iobus_burst_submit_wait(struct iobus_device *iodev, struct iobus_sqe **sqes,
     sqes[n - 1]->done = iobus_done;
     os_completion_reinit(&completion);
     err = __iobus_burst_submit(sq, sqes, n);
+    if (!err)
+        err = os_completion_wait(&completion);
+
+    return err;
+}
+
+int 
+iobus_register_notify(struct iobus_device *iodev, iobus_notify_fn notify) {
+    os_completion_declare(completion)
+    struct iobus_sq *sq = iodev->sq;
+    struct iobus_sqe sqe = {0};
+    struct iobus_sqe *sqes[1];
+    void *args[2];
+    int err;
+
+    sqes[0]  = &sqe;
+    args[0]  = &completion;
+    args[1]  = (void *)notify;
+    sqe.done = iobus_attach_done;
+    sqe.arg  = (void *)args;
+    sqe.dd   = (void *)iodev;
+    sqe.op   = IOBUS_DONE;
+    os_completion_reinit(&completion);
+    err = __iobus_burst_submit(sq, sqes, 1);
     if (!err)
         err = os_completion_wait(&completion);
 

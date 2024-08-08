@@ -42,6 +42,7 @@ struct screen_context {
     uint16_t midsuper_sleep : 1;
     uint16_t post_active : 1;
     uint16_t initialized : 1;
+    struct screen_eventsrc source;
     bool disabled;
 };
 
@@ -56,7 +57,7 @@ do {\
 } while (0)
 
 #define SCREEN_STATE_SET(_sc, _sta) \
-    (_sc)->sm_ops->screen_set(_sta, (uint8_t)(_sc)->brightness);
+    (_sc)->sm_ops->screen_set(&(_sc)->source, _sta, (uint8_t)(_sc)->brightness)
 
 #define MTX_INIT()    os_mtx_init(&sc->lock, 0)
 #define MTX_LOCK()    os_mtx_lock(&sc->lock) 
@@ -122,6 +123,7 @@ static void screen_on_timeout_mid(os_timer_t timer, void *arg) {
     MTX_LOCK();
     if (rte_unlikely(sc->disabled))
         goto _unlock;
+    sc->source.deactive_src = SCREEN_EVSRC_TIMER;
     err = SCREEN_STATE_SET(sc, SCREEN_STATE_MIDDLE);
     if (!err) {
         sc->midsuper_sleep = true;
@@ -144,6 +146,7 @@ static void screen_on_timeout(os_timer_t timer, void *arg) {
     MTX_LOCK();
     if (rte_unlikely(sc->disabled))
         goto _unlock;
+    sc->source.deactive_src = SCREEN_EVSRC_TIMER;
     err = SCREEN_STATE_SET(sc, SCREEN_STATE_SLEEP);
     if (!err)
         NEXT_STATE(sc, sleep_state);
@@ -269,7 +272,7 @@ bool is_screen_faded(void) {
         sc->midsuper_sleep;
 }
 
-int screen_active(unsigned int sec) {
+int __screen_active(unsigned int sec, unsigned int source) {
     struct screen_context *sc = &screen_context;
     int delay, err = -EBUSY;
 
@@ -277,6 +280,7 @@ int screen_active(unsigned int sec) {
     if (rte_unlikely(sc->disabled))
         goto _unlock;
     delay = sec? sec: sc->on_delay;
+    sc->source.active_src = (uint8_t)source;
     err = sc->state->active(sc, delay);
     if (!err)
         sc->on_timestamp = sys_uptime_get();
@@ -287,13 +291,14 @@ _unlock:
     return err;
 }
 
-int screen_deactive(void) {
+int __screen_deactive(unsigned int source) {
     struct screen_context *sc = &screen_context;
     int err = -EBUSY;
 
     MTX_LOCK();
     if (rte_unlikely(sc->disabled))
         goto _unlock;
+    sc->source.deactive_src = (uint8_t)source;
     err = sc->state->deactive(sc);
     pr_dbg("screen deactive with caller(%p)\n", 
         __builtin_return_address(0));
@@ -406,7 +411,8 @@ int screen_manager_refresh_brightness(unsigned int brightness) {
     int err;
 
     MTX_LOCK();
-    err = sc->sm_ops->screen_set(SCREEN_STATE_KEEP, (int)brightness);
+    err = sc->sm_ops->screen_set(&sc->source, SCREEN_STATE_KEEP, 
+        (int)brightness);
     MTX_UNLOCK();
     return err;
 }

@@ -26,10 +26,22 @@ extern "C" {
 #define os_critical_unlock pthread_mutex_unlock(&__mutex);
 
 /* Completion */
-#define os_completion_declare(_cp) sem_t _cp;
-#define os_completion_reinit(_cp)  sem_init((_cp), 0, 0)
-#define os_completion_wait(_cp)    sem_wait((_cp))
-#define os_completed(_cp)          sem_post((_cp))
+typedef sem_t os_completion_t;
+#define os_completion_declare(_cp) os_completion_t _cp;
+#define os_completion_reinit(_cp) sem_init((sem_t *)(_cp), 0, 0)
+#define os_completion_wait(_cp) sem_wait((sem_t *)(_cp))
+#define os_completed(_cp) sem_post((sem_t *)(_cp))
+#define os_completion_timedwait(_cp, _to) \
+	__os_completion_timedwait((sem_t *)(_cp), _to)
+
+static inline int 
+__os_completion_timedwait(sem_t* sem, uint32_t ms) {
+	struct timespec ts;
+	timespec_get(&ts, TIME_UTC);
+	ts.tv_sec += ms / 1000;
+	ts.tv_nsec += ms * 1000000;
+	return sem_timedwait(sem, &ts);
+}
 
 /*
  * Posix platform
@@ -37,6 +49,7 @@ extern "C" {
 #define OS_THREAD_API static inline
 #define OS_MTX_API static inline
 #define OS_SEM_API static inline
+#define OS_CV_API static inline
 
 typedef struct {
 	pthread_t thread;
@@ -60,9 +73,7 @@ typedef struct {
 
 typedef void *cpu_set_t;
 
-#if 0
-extern int pthread_setname_np(pthread_t __target_thread, const char *__name) __THROW
-	__nonnull((2));
+#if 1
 
 static inline void *posix_thread_entry(void *arg) {
 	os_thread_t *thr = (os_thread_t *)arg;
@@ -75,7 +86,6 @@ OS_THREAD_API int _os_thread_spawn(os_thread_t *thread, const char *name, void *
 								   void *arg) {
 	struct sched_param param;
 	pthread_attr_t attr;
-	int err;
 
 	param.sched_priority = prio;
 	pthread_attr_init(&attr);
@@ -88,10 +98,7 @@ OS_THREAD_API int _os_thread_spawn(os_thread_t *thread, const char *name, void *
 	pthread_attr_setschedparam(&attr, &param);
 	thread->adapter.entry = entry;
 	thread->adapter.arg = arg;
-	err = pthread_create(&thread->thread, &attr, posix_thread_entry, thread);
-	if (!err)
-		pthread_setname_np(thread->thread, name);
-	return err;
+	return pthread_create(&thread->thread, &attr, posix_thread_entry, thread);
 }
 
 OS_THREAD_API int _os_thread_destroy(os_thread_t *thread) {
@@ -117,7 +124,9 @@ OS_THREAD_API void _os_thread_yield(void) {
 }
 
 OS_THREAD_API void *_os_thread_self(void) {
-	return (void *)pthread_self();
+	static pthread_t thrd;
+	thrd = pthread_self();
+	return (void *)&thrd;
 }
 #endif 
 
@@ -147,6 +156,22 @@ OS_MTX_API int _os_mtx_timedlock(os_mutex_t *mtx, uint32_t timeout) {
 
 OS_MTX_API int _os_mtx_trylock(os_mutex_t *mtx) {
 	return pthread_mutex_trylock(&mtx->mtx);
+}
+
+OS_CV_API int _os_cv_init(os_cond_t *cv, void *data) {
+	return pthread_cond_init(&cv->cv, NULL);
+}
+
+OS_CV_API int _os_cv_signal(os_cond_t* cv) {
+	return pthread_cond_signal(&cv->cv);
+}
+
+OS_CV_API int _os_cv_broadcast(os_cond_t *cv) {
+	return pthread_cond_broadcast(&cv->cv);
+}
+
+OS_CV_API int _os_cv_wait(os_cond_t *cv, os_mutex_t *mtx) {
+	return pthread_cond_wait(&cv->cv, &mtx->mtx);
 }
 
 #define OS_SEMAPHORE_IMLEMENT
