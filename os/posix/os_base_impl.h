@@ -37,17 +37,29 @@ extern "C"{
 #define os_critical_unlock pthread_mutex_unlock(&__mutex);
 
 /* Completion */
-#define os_completion_declare(_cp) sem_t _cp;
+typedef sem_t os_completion_t;
+#define os_completion_declare(_cp) os_completion_t _cp;
 #define os_completion_reinit(_cp)  sem_init((_cp), 0, 0)
 #define os_completion_wait(_cp)    sem_wait((_cp))
 #define os_completed(_cp)          sem_post((_cp))
+#define os_completion_timedwait(_cp, _to) \
+	__os_completion_timedwait((sem_t *)(_cp), _to)
 
+static inline int 
+__os_completion_timedwait(sem_t* sem, uint32_t ms) {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	ts.tv_sec += ms / 1000;
+	ts.tv_nsec += ms * 1000000;
+	return sem_timedwait(sem, &ts);
+}
 
 /*
   * Posix platform 
  */
 #define OS_THREAD_API static inline
-#define OS_MTX_API    static inline
+#define OS_MTX_API    static __rte_always_inline
+#define OS_CV_API     static __rte_always_inline
 #define OS_SEM_API    static __rte_always_inline
 
 typedef struct {
@@ -181,6 +193,22 @@ _os_mtx_timedlock(os_mutex_t *mtx, uint32_t timeout) {
 OS_MTX_API int 
 _os_mtx_trylock(os_mutex_t *mtx) {
     return pthread_mutex_trylock(&mtx->mtx);
+}
+
+OS_CV_API int _os_cv_init(os_cond_t *cv, void *data) {
+	return pthread_cond_init(&cv->cv, NULL);
+}
+
+OS_CV_API int _os_cv_signal(os_cond_t* cv) {
+	return pthread_cond_signal(&cv->cv);
+}
+
+OS_CV_API int _os_cv_broadcast(os_cond_t *cv) {
+	return pthread_cond_broadcast(&cv->cv);
+}
+
+OS_CV_API int _os_cv_wait(os_cond_t *cv, os_mutex_t *mtx) {
+	return pthread_cond_wait(&cv->cv, &mtx->mtx);
 }
 
 #define OS_SEMAPHORE_IMLEMENT

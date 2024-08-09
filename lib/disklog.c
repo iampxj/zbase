@@ -14,6 +14,7 @@
 #include "basework/dev/disk.h"
 #include "basework/dev/partition.h"
 #include "basework/dev/buffer_io.h"
+#include "basework/dev/blkdev.h"
 #include "basework/lib/printer.h"
 #include "basework/lib/disklog.h"
 #include "basework/log.h"
