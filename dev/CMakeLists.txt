@@ -13,14 +13,13 @@ zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/rte_timer.c
     ${CMAKE_CURRENT_SOURCE_DIR}/fifofs.c
 )
+
 if (CONFIG_BLKDEV_LITE)
     zephyr_library_sources(${CMAKE_CURRENT_SOURCE_DIR}/blkdev_lite.c)
 else ()
     zephyr_library_sources(${CMAKE_CURRENT_SOURCE_DIR}/blkdev.c)
 endif(CONFIG_BLKDEV_LITE)
 endif()
-
-
 
 if (NOT CONFIG_BOOTLOADER)
 zephyr_library_sources_ifdef(CONFIG_PTFS   
@@ -29,3 +28,14 @@ zephyr_library_sources_ifdef(CONFIG_PTFS
 )
 zephyr_library_sources_ifdef(CONFIG_XIPFS  ${CMAKE_CURRENT_SOURCE_DIR}/xipfs.c)
 endif()
+
+
+if (CONFIG_BCACHE)
+zephyr_library_named(bcache)
+zephyr_library_compile_options(
+    -O2
+)
+zephyr_library_sources(
+    ${CMAKE_CURRENT_SOURCE_DIR}/bcache.c
+)
+endif(CONFIG_BCACHE)

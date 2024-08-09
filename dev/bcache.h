@@ -69,11 +69,10 @@ struct bcache_sg_buffer {
  *
  * Transfer requests are issued to the disk device driver with the
  * @ref BCACHE_IO_REQUEST IO control.  The transfer request completion status
- * must be signalled with rtems_blkdev_request_done().  This function must be
+ * must be signalled with bcache_request_done().  This function must be
  * called exactly once per request.  The return value of the IO control will be
  * ignored for transfer requests.
  *
- * @see rtems_blkdev_create().
  */
 struct bcache_request {
 	enum bcache_request_op req;
@@ -212,7 +211,7 @@ struct bcache_read_ahead {
 	 * @brief Block value to trigger the read-ahead request.
 	 *
 	 * A value of @ref BCACHE_READ_AHEAD_NO_TRIGGER will disable further
-	 * read-ahead requests (except the ones triggered by @a rtems_bdbuf_peek)
+	 * read-ahead requests (except the ones triggered by @a bcache_peek)
 	 * since no valid block can have this value.
 	 */
 	bcache_num_t trigger;
@@ -506,6 +505,8 @@ struct bcache_config {
 	uint32_t buffer_min;
 	uint32_t buffer_max;
 	int read_ahead_priority;
+	void *(*stack_alloc)(size_t size);
+	void *(*stack_free)(void *ptr);
 };
 
 /**

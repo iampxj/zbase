@@ -57,6 +57,9 @@
 #define __rte_always_inline inline
 #endif
 
+#ifndef BCACHE_MEMCPY
+#define BCACHE_MEMCPY(d, s, n) memcpy(d, s, n)
+#endif
 
 /*
  * Bcache hashmap 
@@ -211,9 +214,11 @@ typedef enum {
 	bcache_avl_gather_for_purge((_list), (_dd))
 #endif /* CONFIG_BCACHE_HASH_MAP */
 
+#ifdef CONFIG_BCACHE_READ_AHEAD
+static void bcache_read_ahead_task(void *arg);
+#endif
 static void bcache_swapout_worker_task(void *arg);
 static void bcache_swapout_task(void *arg);
-static void bcache_read_ahead_task(void *arg);
 static void bcache_transfer_done(struct bcache_request *req, int status);
 
 /**
@@ -301,6 +306,31 @@ void bcache_show_users(const char *where, struct bcache_buffer *bd) {
 
 #define bcache_fatal(err) rte_assert0((err) == 0)
 
+static void *
+bcache_stack_alloc(size_t size) {
+	void *ptr;
+
+	if (bdbuf_config.stack_alloc) {
+		ptr = bdbuf_config.stack_alloc(size);
+		goto _out;
+	}
+	ptr = general_malloc(size);
+
+_out:
+	if (ptr)
+		memset(ptr, 0, size);
+	return ptr;
+}
+
+static void
+bcache_stack_free(void *ptr) {
+	if (bdbuf_config.stack_free) {
+		bdbuf_config.stack_free(ptr);
+		return;
+	}
+	general_free(ptr);
+}
+
 static int 
 bcache_create_task(const char *name, int prio,
 	void (*entry)(void *), 
@@ -313,14 +343,14 @@ bcache_create_task(const char *name, int prio,
 	if (pthrd == NULL)
 		return -EINVAL;
 
-	thr = general_calloc(1, sizeof(*thr) + stack_size);
+	thr = bcache_stack_alloc(sizeof(*thr) + stack_size);
 	if (thr == NULL)
 		return -ENOMEM;
 
 	err = os_thread_spawn(thr, name, thr + 1, stack_size, 
 		prio, entry, arg);
 	if (err) {
-		general_free(thr);
+		bcache_stack_free(thr);
 		return err;
 	}
 	
@@ -332,7 +362,7 @@ static void
 bcache_delete_task(os_thread_t *thread) {
 	if (thread) {
 		os_thread_destroy(thread);
-		general_free(thread);
+		bcache_stack_free(thread);
 	}
 }
 
@@ -1128,6 +1158,10 @@ static int bcache_do_init(void) {
 
 	if (bcache_read_request_size(bdbuf_config.max_read_ahead_blocks) >
 		BCACHE_MINIMUM_STACK_SIZE / 8U)
+		return -EINVAL;
+
+	if ((bdbuf_config.stack_alloc && !bdbuf_config.stack_free) ||
+		(!bdbuf_config.stack_alloc && bdbuf_config.stack_free))
 		return -EINVAL;
 
 	bdbuf_cache.sync_device = NULL;
@@ -2598,7 +2632,9 @@ bcache_disk_init_phys(struct bcache_device *dd,
 	dd->media_block_size = block_size;
 	dd->ioctl = handler;
 	dd->driver_data = driver_data;
+#ifdef CONFIG_BCACHE_READ_AHEAD
 	dd->read_ahead.trigger = BCACHE_READ_AHEAD_NO_TRIGGER;
+#endif
 	if (block_count > 0) {
 		if ((*handler)(dd, BCACHE_IO_CAPABILITIES, &dd->capabilities)) 
 			dd->capabilities = 0;
@@ -2620,7 +2656,9 @@ bcache_disk_init_log(struct bcache_device *dd,
 	dd->media_block_size = phys_dd->media_block_size;
 	dd->ioctl = phys_dd->ioctl;
 	dd->driver_data = phys_dd->driver_data;
+#ifdef CONFIG_BCACHE_READ_AHEAD
 	dd->read_ahead.trigger = BCACHE_READ_AHEAD_NO_TRIGGER;
+#endif
 
 	if (phys_dd->phys_dev == phys_dd) {
 		bcache_num_t phys_block_count = phys_dd->size;
@@ -2657,7 +2695,7 @@ bcache_dev_read(struct bcache_device *dd, void *buffer,
 		if (copy > remaining) 
 			copy = remaining;
 
-		memcpy(dst, (char *)bd->buffer + block_offset, (size_t)copy);
+		BCACHE_MEMCPY(dst, (char *)bd->buffer + block_offset, (size_t)copy);
 		rv = bcache_release(bd);
 		if (rte_unlikely(rv))
 			return -EIO;
@@ -2699,7 +2737,7 @@ bcache_dev_write(struct bcache_device *dd, const void *buffer,
 		if (copy > remaining) 
 			copy = remaining;
 			
-		memcpy((char *)bd->buffer + block_offset, src, (size_t)copy);
+		BCACHE_MEMCPY((char *)bd->buffer + block_offset, src, (size_t)copy);
 		rv = bcache_release_modified(bd);
 		if (rte_unlikely(rv))
 			return -EIO;
@@ -2736,6 +2774,10 @@ bcache_dev_create(const char* device, uint32_t media_block_size,
 
 	if (media_block_size & (media_block_size- 1))
 		return -EINVAL;
+
+	err = bcache_init();
+	if (err)
+		return err;
 
 	devn = general_calloc(1, sizeof(*devn) + strlen(device) + 1);
 	if (devn == NULL)
@@ -2780,9 +2822,7 @@ bcache_dev_find(const char* device) {
 }
 
 
-
-
-
+#ifdef CONFIG_BCACHE_TEST
 //TODO:
 const struct bcache_config bcache_configuration = {
 	.max_read_ahead_blocks = 0,
@@ -2875,4 +2915,4 @@ void ramdisk_test(void) {
 	bcache_syncdev(dd);
 	bcache_purge_dev(dd);
 }
-
+#endif /* CONFIG_BCACHE_TEST */

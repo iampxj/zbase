@@ -342,9 +342,16 @@ static int __rte_unused __rte_notrace platform_flash_init(void) {
     const char *devnames[] = {
         CONFIG_SPI_FLASH_NAME,
         CONFIG_SPI_FLASH_1_NAME,
-        CONFIG_SPI_FLASH_2_NAME,
-        CONFIG_SPINAND_FLASH_NAME,
+        CONFIG_SPI_FLASH_2_NAME
+#ifdef CONFIG_SPINAND_FLASH_NAME
+        ,
+        CONFIG_SPINAND_FLASH_NAME
+#endif
+
+#ifdef CONFIG_BLOCK_DEV_FLASH_NAME
+        ,
         CONFIG_BLOCK_DEV_FLASH_NAME
+#endif
     };
     
     for (int i = 0; i < ARRAY_SIZE(devnames); i++) {

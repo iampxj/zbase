@@ -4,6 +4,7 @@
 #ifndef BASEWORK_DEV_BLKDEV_H_
 #define BASEWORK_DEV_BLKDEV_H_
 
+#include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
 

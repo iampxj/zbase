@@ -16,6 +16,9 @@ zephyr_library_sources(
     os_hack.c
     os_bus.c
 )
+zephyr_library_sources_ifdef(CONFIG_BCACHE
+    os_bcachedev.c
+)
 zephyr_library_sources_ifdef(CONFIG_GPT_UPDATE
     os_gpt_param.c
 )

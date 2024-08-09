@@ -6,7 +6,7 @@
 #ifndef BASEWORK_OS_ZEPHYR_OS_BASE_H_
 #define BASEWORK_OS_ZEPHYR_OS_BASE_H_
 
-#include "basework/compiler.h"
+#include "basework/compiler_attributes.h"
 #include <assert.h>
 #include <kernel.h>
 
@@ -29,10 +29,12 @@ extern "C"{
 
 /* */
 #ifndef CONFIG_BOOTLOADER
+typedef struct k_sem os_completion_t;
 #define os_completion_declare(_cp) struct k_sem _cp;
 #define os_completion_reinit(_cp)  k_sem_init((_cp), 0, 1)
 #define os_completion_wait(_cp)    k_sem_take((_cp), K_FOREVER)
 #define os_completed(_cp)          k_sem_give((_cp))
+#define os_completion_timedwait(_cp, _to) k_sem_take((_cp), K_MSEC(_to))
 
 #endif /* CONFIG_BOOTLOADER */
 
@@ -41,8 +43,8 @@ extern "C"{
   * Zephyr platform 
  */
 #define OS_THREAD_API static inline
-#define OS_MTX_API    static inline
-#define OS_CV_API     
+#define OS_MTX_API    static __rte_always_inline
+#define OS_CV_API     static __rte_always_inline
 #define OS_SEM_API    static __rte_always_inline
 
 typedef void* cpu_set_t;
@@ -55,7 +57,7 @@ typedef struct {
 } os_mutex_t;
 
 typedef struct {
-    int _unused;
+    struct k_condvar cv;
 } os_cond_t;
 
 typedef struct {
@@ -147,6 +149,22 @@ _os_mtx_timedlock(os_mutex_t *mtx, uint32_t timeout) {
 OS_MTX_API int 
 _os_mtx_trylock(os_mutex_t *mtx) {
     return k_mutex_lock(&mtx->mtx, K_NO_WAIT);
+}
+
+OS_CV_API int _os_cv_init(os_cond_t *cv, void *data) {
+	return k_condvar_init(&cv->cv);
+}
+
+OS_CV_API int _os_cv_signal(os_cond_t* cv) {
+	return k_condvar_signal(&cv->cv);
+}
+
+OS_CV_API int _os_cv_broadcast(os_cond_t *cv) {
+	return k_condvar_broadcast(&cv->cv);
+}
+
+OS_CV_API int _os_cv_wait(os_cond_t *cv, os_mutex_t *mtx) {
+	return k_condvar_wait(&cv->cv, &mtx->mtx, K_FOREVER);
 }
 
 #define OS_SEMAPHORE_IMLEMENT
