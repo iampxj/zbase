@@ -15,7 +15,7 @@
  */
 
 /*
- * Coypright 2024 wtcat modified
+ * Coypright 2024 wtcat
  */
 
 #define BCACHE_TRACE 0
@@ -816,21 +816,6 @@ bcache_media_block(const struct bcache_device *dd, bcache_num_t block) {
 	((block) << (dd)->block_to_media_block_shift)
 #endif /* CONFIG_BCACHE_BLOCK_POWEROF2_MEDIA_SIZE */
 
-/**
- * Wait until woken. Semaphores are used so a number of tasks can wait and can
- * be woken at once. Task events would require we maintain a list of tasks to
- * be woken and this would require storage and we do not know the number of
- * tasks that could be waiting.
- *
- * While we have the cache locked we can try and claim the semaphore and
- * therefore know when we release the lock to the cache we will block until the
- * semaphore is released. This may even happen before we get to block.
- *
- * A counter is used to save the release call when no one is waiting.
- *
- * The function assumes the cache is locked on entry and it will be locked on
- * exit.
- */
 static void 
 bcache_anonymous_wait(struct bcache_waiters *waiters) {
 	/*
@@ -963,11 +948,6 @@ bcache_add_to_lru_list_after_access(struct bcache_buffer *bd) {
 		bcache_wake(&bdbuf_cache.buffer_waiters);
 }
 
-/**
- * Compute the number of BDs per group for a given buffer size.
- *
- * @param size The buffer size. It can be any size and we scale up.
- */
 static size_t bcache_bds_per_group(size_t size) {
 	size_t bufs_per_size;
 	size_t bds_per_size;
@@ -994,15 +974,6 @@ static void bcache_discard_buffer_after_access(struct bcache_buffer *bd) {
 		bcache_wake(&bdbuf_cache.buffer_waiters);
 }
 
-/**
- * Reallocate a group. The BDs currently allocated in the group are removed
- * from the ALV tree and any lists then the new BD's are prepended to the ready
- * list of the cache.
- *
- * @param group The group to reallocate.
- * @param new_bds_per_group The new count of BDs per group.
- * @return A buffer of this group.
- */
 static struct bcache_buffer *
 bcache_group_realloc(struct bcache_group *group, size_t new_bds_per_group) {
 	struct bcache_buffer *bd;
@@ -1574,15 +1545,6 @@ bcache_get(struct bcache_device *dd, bcache_num_t block,
 	return sc;
 }
 
-/**
- * Call back handler called by the low level driver when the transfer has
- * completed. This function may be invoked from interrupt handler.
- *
- * @param arg Arbitrary argument specified in block device request
- *            structure (in this case - pointer to the appropriate
- *            block device request structure).
- * @param status I/O completion status
- */
 static void 
 bcache_transfer_done(struct bcache_request *req, int status) {
 	req->status = status;
@@ -1966,20 +1928,11 @@ bcache_syncdev(struct bcache_device *dd) {
 	return 0;
 }
 
-/**
- * Swapout transfer to the driver. The driver will break this I/O into groups
- * of consecutive write requests is multiple consecutive buffers are required
- * by the driver. The cache is not locked.
- *
- * @param transfer The transfer transaction.
- */
 static void bcache_swapout_write(struct bcache_swapout_transfer *transfer) {
 	struct rte_list *node;
 
 	pr_dbg("bdbuf:swapout transfer: %08x\n", (unsigned)transfer->dd->dev);
-	/*
-	 * If there are buffers to transfer to the media transfer them.
-	 */
+
 	if (!rte_list_empty(&transfer->bds)) {
 		/*
 		 * The last block number used when the driver only supports
@@ -2062,20 +2015,6 @@ static void bcache_swapout_write(struct bcache_swapout_transfer *transfer) {
 	}
 }
 
-/**
- * Process the modified list of buffers. There is a sync or modified list that
- * needs to be handled so we have a common function to do the work.
- *
- * @param dd_ptr Pointer to the device to handle. If BDBUF_INVALID_DEV no
- * device is selected so select the device of the first buffer to be written to
- * disk.
- * @param chain The modified chain to process.
- * @param transfer The chain to append buffers to be written too.
- * @param sync_active If true this is a sync operation so expire all timers.
- * @param update_timers If true update the timers.
- * @param timer_delta It update_timers is true update the timers by this
- *                    amount.
- */
 static void 
 bcache_swapout_modified_processing(struct bcache_device **dd_ptr,
 	struct rte_list *chain, 
@@ -2167,22 +2106,6 @@ bcache_swapout_modified_processing(struct bcache_device **dd_ptr,
 	}
 }
 
-/**
- * Process the cache's modified buffers. Check the sync list first then the
- * modified list extracting the buffers suitable to be written to disk. We have
- * a device at a time. The task level loop will repeat this operation while
- * there are buffers to be written. If the transfer fails place the buffers
- * back on the modified list and try again later. The cache is unlocked while
- * the buffers are being written to disk.
- *
- * @param timer_delta It update_timers is true update the timers by this
- *                    amount.
- * @param update_timers If true update the timers.
- * @param transfer The transfer transaction data.
- *
- * @retval true Buffers where written to disk so scan again.
- * @retval false No buffers where written to disk.
- */
 static bool 
 bcache_swapout_processing(unsigned long timer_delta, bool update_timers,
 	struct bcache_swapout_transfer *transfer) {
@@ -2232,15 +2155,14 @@ bcache_swapout_processing(unsigned long timer_delta, bool update_timers,
 	 * list. The first sync buffer will select the device we use.
 	 */
 	bcache_swapout_modified_processing(&transfer->dd, &bdbuf_cache.sync,
-											&transfer->bds, true, false, timer_delta);
+		&transfer->bds, true, false, timer_delta);
 
 	/*
 	 * Process the cache's modified list.
 	 */
 	bcache_swapout_modified_processing(&transfer->dd, &bdbuf_cache.modified,
-											&transfer->bds, sync_active, update_timers,
-											timer_delta);
-
+		&transfer->bds, sync_active, update_timers, timer_delta);
+											
 	/*
 	 * We have all the buffers that have been modified for this device so the
 	 * cache can be unlocked because the state of each buffer has been set to
@@ -2274,12 +2196,6 @@ bcache_swapout_processing(unsigned long timer_delta, bool update_timers,
 	return transfered_buffers;
 }
 
-/**
- * The swapout worker thread body.
- *
- * @param arg A pointer to the worker thread's private data.
- * @return void Not used.
- */
 static void 
 bcache_swapout_worker_task(void * arg) {
 	struct bcache_swapout_worker *worker = (struct bcache_swapout_worker *)arg;
@@ -2299,9 +2215,6 @@ bcache_swapout_worker_task(void * arg) {
 	os_thread_exit();
 }
 
-/**
- * Close the swapout worker threads.
- */
 static void bcache_swapout_workers_close(void) {
 	struct rte_list *pos;
 
@@ -2888,70 +2801,49 @@ const struct bcache_config bcache_configuration = {
 
 struct ramdisk {
 	char area[1024*1024];
-	size_t block_size;
 };
 
-static int 
-ramdisk_read(struct ramdisk *rd, struct bcache_request *req) {
-	struct bcache_sg_buffer *sg = req->bufs;
-	uint8_t *from = (uint8_t *)rd->area;
+static inline int
+ramdisk_io_request(struct ramdisk *rd, struct bcache_request *r, size_t blksize) {
+	struct bcache_sg_buffer *sg = r->bufs;
+	uint8_t *buf = (uint8_t *)rd->area;
 
-	for (uint32_t i = 0; i < req->bufnum; i++, sg++) {
-		memcpy(sg->buffer, from + (sg->block * rd->block_size), sg->length);
-	}
-	bcache_request_done(req, 0);
-	return 0;
-}
-
-static int 
-ramdisk_write(struct ramdisk *rd, struct bcache_request *req) {
-	uint8_t *to = (uint8_t *)rd->area;
-	struct bcache_sg_buffer *sg = req->bufs;
-
-	for (uint32_t i = 0; i < req->bufnum; i++, sg++) {
-		memcpy(to + (sg->block * rd->block_size), sg->buffer, sg->length);
-	}
-	bcache_request_done(req, 0);
-	return 0;
-}
-
-static int 
-ramdisk_ioctl(struct bcache_device *dd, uint32_t req, void *argp) {
-	struct ramdisk *rd = bcache_disk_get_driver_data(dd);
-	switch (req) {
-	case BCACHE_IO_REQUEST: {
-		struct bcache_request *r = argp;
-		switch (r->req) {
-		case BCACHE_DEV_REQ_READ:
-			return ramdisk_read(rd, r);
-		case BCACHE_DEV_REQ_WRITE:
-			return ramdisk_write(rd, r);
-		default:
-			errno = EINVAL;
-			return -1;
-		}
+	switch (r->req) {
+	case BCACHE_DEV_REQ_READ:
+		for (uint32_t i = 0; i < r->bufnum; i++, sg++)
+			memcpy(sg->buffer, buf + (sg->block * blksize), sg->length);
 		break;
-	}
-	case BCACHE_IO_DELETED:
+	case BCACHE_DEV_REQ_WRITE:
+		for (uint32_t i = 0; i < r->bufnum; i++, sg++) 
+			memcpy(buf + (sg->block * blksize), sg->buffer, sg->length);
 		break;
+	case BCACHE_DEV_REQ_SYNC:
+		return -ENOSYS;
 	default:
-		return bcache_ioctl(dd, req, argp);
-		break;
+		return -EINVAL;
 	}
-	errno = EINVAL;
-	return -1;
+
+	bcache_request_done(r, 0);
+	return 0;
+}
+
+static int 
+ramdisk_driver_entry(struct bcache_device *dd, uint32_t req, void *argp) {
+	struct ramdisk *rd = bcache_disk_get_driver_data(dd);
+	if (req == BCACHE_IO_REQUEST)
+		return ramdisk_io_request(rd, argp, dd->block_size);
+
+	return bcache_ioctl(dd, req, argp);
 }
 
 static struct bcache_device *ramdisk_init(void) {
-	static struct ramdisk ramdisk_inst = {
-		.block_size = 512
-	};
+	static struct ramdisk ramdisk_inst;
 	struct bcache_device *dd;
 
 	bcache_dev_create("ramdisk", 
-		ramdisk_inst.block_size,
-		sizeof(ramdisk_inst.area) / ramdisk_inst.block_size, 
-		ramdisk_ioctl,
+		512,
+		sizeof(ramdisk_inst.area) / 512, 
+		ramdisk_driver_entry,
 		&ramdisk_inst,
 		&dd
 	);

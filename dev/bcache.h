@@ -11,7 +11,7 @@
  */
 
 /*
- * Coypright 2024 wtcat modified
+ * Coypright 2024 wtcat
  */
 
 #ifndef BASEWORK_DEV_BCACHE_H_
@@ -484,9 +484,7 @@ struct bcache_buffer {
 struct bcache_group {
 	struct rte_list link;	   /**< Link the groups on a LRU list if they
 								* have no buffers in use. */
-	size_t bds_per_group;	   /**< The number of BD allocated to this
-								* group. This value must be a multiple of
-								* 2. */
+	size_t bds_per_group;
 	uint32_t users;			   /**< How many users the block has. */
 	struct bcache_buffer *bdbuf; /**< First BD this block covers. */
 };
