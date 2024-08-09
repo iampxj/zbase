@@ -14,10 +14,11 @@ extern "C"{
 
 struct param_struct {
     const char *name;
-    uint32_t flags;
-#define PARAM_WR  0x10000
+    unsigned int flags;
+#define PARAM_RO  0x10000 /* Readonly */
 
 #define PARAM_TYPEMASK 0xf
+#define PARAM_POINTER  0x1
 #define	PARAM_INT	   0x2
 #define	PARAM_STRING   0x3
 #define	PARAM_S64	   0x4
@@ -36,7 +37,7 @@ struct param_struct {
 
 // LINKER_ROSET(param, struct param_struct);
 
-#define EXPORT_PARAM(_var, _attr) \
+#define RTE_EXPORT_PARAM(_var, _attr) \
     static const char _param_name__##_var[] \
     __rte_section(ROSET_SORTED_SECTION ".NAME") __rte_used = {#_var}; \
     static LINKER_ROSET_ITEM_ORDERED(param, struct param_struct, \
@@ -46,37 +47,14 @@ struct param_struct {
         .p = &_var \
     }
 
-#define __param_type(v) \
-({ \
-    int __type_id; \
-    if (__rte_same_type(v, (int)0)) __type_id = PARAM_INT; \
-    else if (__rte_same_type(v, (char *)0) || \
-        __rte_same_type(v, (const char *)0)) __type_id = PARAM_STRING; \
-    else if (__rte_same_type(v, (int64_t)0)) __type_id = PARAM_S64; \
-    else if (__rte_same_type(v, (unsigned int)0)) __type_id = PARAM_UINT; \
-    else if (__rte_same_type(v, (long)0)) __type_id = PARAM_LONG; \
-    else if (__rte_same_type(v, (unsigned long)0)) __type_id = PARAM_ULONG; \
-    else if (__rte_same_type(v, (uint64_t)0)) __type_id = PARAM_U64; \
-    else if (__rte_same_type(v, (uint8_t)0)) __type_id = PARAM_U8; \
-    else if (__rte_same_type(v, (uint16_t)0)) __type_id = PARAM_U16; \
-    else if (__rte_same_type(v, (int8_t)0)) __type_id = PARAM_S8; \
-    else if (__rte_same_type(v, (int16_t)0)) __type_id = PARAM_S16; \
-    else if (__rte_same_type(v, (int32_t)0)) __type_id = PARAM_S32; \
-    else if (__rte_same_type(v, (uint32_t)0)) __type_id = PARAM_U32; \
-    else rte_compiletime_assert(0, ""); __type_id = 0; \
-    __type_id; \
-})
-
-
 #define RTE_PARAM_WRITE(_name, _val) \
 ({ \
     typeof(_val) __val = _val; \
-    int __err; \
-    __err = rte_param_write(rte_param_serach(_name), &__val, __param_type(_val)); \
+    int __err = rte_param_write(rte_param_serach(_name), (int64_t)__val); \
     __err; \
 })
 
-int rte_param_write(const struct param_struct *param, const void *pv, int type);
+int rte_param_write(const struct param_struct *param, int64_t pv);
 const struct param_struct *rte_param_serach(const char *name);
 void rte_param_dump(void);
 

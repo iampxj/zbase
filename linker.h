@@ -64,8 +64,8 @@ extern "C" {
  * Foreach section
  */
 #define LINKER_SET_FOREACH(set, item) \
-    for (item = (void *)LINKER_SET_BEGIN(set); \
-        item != LINKER_SET_END( set ); \
+    for (item = LINKER_SET_BEGIN(set); \
+        item < LINKER_SET_END(set); \
         ++item \
     )
 

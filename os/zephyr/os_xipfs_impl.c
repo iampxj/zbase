@@ -192,7 +192,7 @@ static int __rte_unused xipfs_impl_register(const struct device *dev) {
     (void) dev;
 
     const struct partition_entry *parti;
-    parti = partition_get_stf_part(STORAGE_ID_NOR, PARTITION_FILE_ID_UDISK);
+    parti = parition_get_entry2(STORAGE_ID_NOR, PARTITION_FILE_ID_UDISK);
     if (!parti) {
         pr_err("Not found udisk parition\n");
         return -ENOENT;

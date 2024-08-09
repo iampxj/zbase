@@ -24,7 +24,6 @@ struct fstab_info {
 };
 
 static const struct fstab_info fs_table[] = {
-    {"filesystem_ext",  "fatfs",    "UD3", "/UD3:", UINT32_MAX},  /* Limit to 1.8MB */
     {"filesystem",      "littlefs", "UD0", "/UD0:", UINT32_MAX},
     {"firmware",        "littlefs", "UD1", "/UD1:", 0x1c2000},  /* Limit to 1.8MB */
 #if !defined(CONFIG_PTFS) && \
@@ -121,7 +120,7 @@ int __rte_notrace platform_extend_filesystem_init(int fs_type) {
                 pr_err("Not found filesystem partition(%s)\n", fs_table[i].name);
                 continue;
             }
-            parti = partition_get_stf_part(STORAGE_ID_NOR, 
+            parti = parition_get_entry2(STORAGE_ID_NOR, 
                 PARTITION_FILE_ID_UDISK);
             dpobj.parent = CONFIG_SPI_FLASH_NAME;
             dpobj.offset = parti->offset;

@@ -308,29 +308,30 @@ _default:
     pr_warn("The firmware set default load-address(0x%08x)\n", loader->offset);
 }
 
-static int bootloader_init(uint32_t media_size) {
+static int bootloader_init(uint32_t media_size, const char *loaddev, 
+    const char *rundev) {
     const char *disk = NULL;
     int err;
 
     fw_curinfo.offset = FW_INFO_OFFSET(media_size);
-    err = disk_device_open(FW_LOAD_DEVICE, &fw_curinfo.dd);
+    err = disk_device_open(loaddev, &fw_curinfo.dd);
     if (err) {
-        disk = FW_LOAD_DEVICE;
+        disk = loaddev;
         err = -ENODEV;
         goto _err;
     }
 
     fw_runner.offset = FW_RUN_OFFSET;
-    err = disk_device_open(FW_RUN_DEVICE, &fw_runner.dd);
+    err = disk_device_open(rundev, &fw_runner.dd);
     if (err) {
-        disk = FW_RUN_DEVICE;
+        disk = rundev;
         err = -ENODEV;
         goto _err;
     }
 
-    err = disk_device_open(FW_LOAD_DEVICE, &fw_loader.dd);
+    err = disk_device_open(loaddev, &fw_loader.dd);
     if (err) {
-        disk = FW_LOAD_DEVICE;
+        disk = loaddev;
         err = -ENODEV;
         goto _err;
     }
@@ -350,6 +351,8 @@ _err:
  * Bootloader entry
  */
 int general_boot(
+    const char *ddev,
+    const char *sdev,
     uint32_t media_start,
     uint32_t media_size,
     void (*boot)(void), 
@@ -368,7 +371,7 @@ int general_boot(
         return -EINVAL;
     }
 
-    err = bootloader_init(media_size);
+    err = bootloader_init(media_size, sdev, ddev);
     assert(err == 0);
 
     /*
@@ -388,29 +391,6 @@ _repeat_update:
         pr_err("firmware update failed(%d)\n", err);
         goto _do_boot;
     }
-
-#if 0
-    /*
-     * If the current firmware has some problems and infinite reboot 
-     */
-    if (force_recovery || is_fw_need_recovery()) {
-        if (!is_fw_can_recovery()) {
-            pr_warn("firmware backup partition is invalid!!\n");
-            goto _do_boot;
-        }
-        pr_info("firmware recovery beginning...\n");
-
-_repeat_recovery:
-        err = fw_copy_decomp(&fw_runner, &fw_recovery, notify, "recovery");
-        if (!err) {
-            pr_info("firmware recovery success!\n");
-            goto _do_boot;
-        }
-        if (i++ < trycnt)
-            goto _repeat_recovery;
-        goto _err;
-    }
-#endif
 
 _do_boot:
     pr_dbg("Starting firmware ...\n");

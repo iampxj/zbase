@@ -275,7 +275,7 @@ pt_param_copy_from_oldpt(const struct device *dev, uint8_t storage) {
      * Calculator and check size for backup region 
      */
     for (i = 0; i < ARRAY_SIZE(file_array); i++) {
-        old_pt = partition_get_stf_part(storage, file_array[i]);
+        old_pt = parition_get_entry2(storage, file_array[i]);
         assert(old_pt != NULL);
         assert((old_pt->file_offset & FLASH_PAGE_MASK) == 0); 
         sum += old_pt->size;
@@ -296,7 +296,7 @@ pt_param_copy_from_oldpt(const struct device *dev, uint8_t storage) {
     WATCHDOG_FEED();
 
     for (i = 0; i < ARRAY_SIZE(file_array); i++) {
-        old_pt = partition_get_stf_part(storage, file_array[i]);
+        old_pt = parition_get_entry2(storage, file_array[i]);
         len = old_pt->size;
         ofs = old_pt->file_offset;
 
@@ -328,7 +328,7 @@ pt_param_copy_from_oldpt(const struct device *dev, uint8_t storage) {
     backup_ofs = 0;
 
     for (i = 0; i < ARRAY_SIZE(file_array); i++) {
-        old_pt = partition_get_stf_part(storage, file_array[i]);
+        old_pt = parition_get_entry2(storage, file_array[i]);
         new_pt = get_file_entry(storage, file_array[i]);
         assert(new_pt != NULL);
 

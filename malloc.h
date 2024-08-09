@@ -22,7 +22,7 @@ extern "C"{
 #define general_calloc(n, size) calloc(n, size)
 #define general_realloc(ptr, size) realloc(ptr, size)
 #define general_free(ptr)       free(ptr)
-#define general_aligned_alloc(alignment, size) aligned_alloc(alignment, size)
+#define general_aligned_alloc(alignment, size) malloc(size)
 
 #else /* Not general operation system */
 
