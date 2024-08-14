@@ -2,7 +2,8 @@ if (CONFIG_KASAN)
 zephyr_library_named(xdebug)
 
 zephyr_library_compile_options(
-    -fno-sanitize=all
+    -fno-sanitize=kernel-address
+    -fno-lto
 )
 
 zephyr_library_sources(

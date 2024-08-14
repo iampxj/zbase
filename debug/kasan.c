@@ -1,321 +1,219 @@
 /*
- * Copyright wtcat 2024
- *
- * -fsanitize=kernel-addr
- * -fno-sanitize=all
+ * Copyright 2024 wtcat
  */
-
-#ifdef CONFIG_HEADER_FILE
-#include CONFIG_HEADER_FILE
-#endif
-
+#include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 
-#include "basework/generic.h"
-#include "basework/debug/kasan.h"
-#include "basework/log.h"
 #include "basework/os/osapi.h"
+#include "basework/compiler.h"
+#include "basework/assert.h"
+#include "basework/debug/kasan.h"
+#include "basework/container/queue.h"
 
-/*
- * Memory access mode
- */
-#define ASAN_WRITE 0
-#define ASAN_READ  1
+#define KASAN_BYTES_PER_WORD (sizeof(uintptr_t))
+#define KASAN_BITS_PER_WORD (KASAN_BYTES_PER_WORD * 8)
 
-#define ASAN_MEM_BEG (memory_base)
-#define ASAN_MEM_END (memory_base + ASAN_MEM_SIZE)
-#define IS_ADDR_VALID(addr) \
-    (((uintptr_t)(addr) >= ASAN_MEM_BEG) && ((uintptr_t)(addr) < ASAN_MEM_END))
+#define KASAN_FIRST_WORD_MASK(start)                                                     \
+	(UINTPTR_MAX << ((start) & (KASAN_BITS_PER_WORD - 1)))
+#define KASAN_LAST_WORD_MASK(end) (UINTPTR_MAX >> (-(end) & (KASAN_BITS_PER_WORD - 1)))
 
-static uint8_t   shadow_area[ASAN_MEM_SIZE / 8] __rte_section(ASAN_SHADOW_SECTION);
-static uintptr_t memory_base = ASAN_MEM_BASE;
+#define KASAN_SHADOW_SCALE (sizeof(uintptr_t))
 
-static void asan_report_error(void *addr, size_t size, int access, 
-    void *retip) {
-    pr_out("Asan check failure: %s addr 0x%x size: %d retip(%p)\n", 
-        access == ASAN_WRITE? "write": "read", addr, size, retip);
-    os_panic();
+#define KASAN_SHADOW_SIZE(size)                                                          \
+	(KASAN_BYTES_PER_WORD * ((size) / KASAN_SHADOW_SCALE / KASAN_BITS_PER_WORD))
+#define KASAN_REGION_SIZE(size) (sizeof(struct kasan_region) + KASAN_SHADOW_SIZE(size))
+
+#define KASAN_INIT_VALUE 0xDEADCAFE
+
+struct kasan_region {
+	SLIST_ENTRY(kasan_region) link;
+	uintptr_t begin;
+	uintptr_t end;
+	uintptr_t shadow[1];
+};
+
+static SLIST_HEAD(kasan_list, kasan_region) kasan_list = 
+	SLIST_HEAD_INITIALIZER(kasan_list);
+static uintptr_t kasan_state;
+
+static __rte_always_inline uintptr_t *
+kasan_mem_to_shadow(const void *ptr, size_t size, unsigned int *bit) {
+	struct kasan_region *region;
+	uintptr_t addr = (uintptr_t)ptr;
+
+	if (rte_unlikely(kasan_state != KASAN_INIT_VALUE))
+		return NULL;
+
+	SLIST_FOREACH(region, &kasan_list, link) {
+		if (addr >= region->begin && addr < region->end) {
+			rte_assert(addr + size <= region->end);
+			addr -= region->begin;
+			addr /= KASAN_SHADOW_SCALE;
+			*bit = addr % KASAN_BITS_PER_WORD;
+			return &region->shadow[addr / KASAN_BITS_PER_WORD];
+		}
+	}
+
+	return NULL;
 }
 
-static void __rte_noreturn __asan_report_error(void) {
-    os_panic();
-    for ( ; ; );
+static void kasan_report(const void *addr, size_t size, bool is_write,
+						 void *return_address) {
+	static int recursion;
+
+	if (++recursion == 1) {
+		pr_out("kasan detected a %s access error, address at %p,"
+			   "size is %zu, return address: %p\n",
+			   is_write ? "write" : "read", addr, size, return_address);
+		rte_assert0(0);
+	}
+
+	--recursion;
 }
 
-static __rte_always_inline uint8_t *asan_mem2shadow(void *addr) {
-    uintptr_t ofs = (uintptr_t)addr - memory_base;
-    return shadow_area + (ofs >> 3);
+static bool kasan_is_poisoned(const void *addr, size_t size) {
+	uintptr_t *p;
+	unsigned int bit;
+
+	p = kasan_mem_to_shadow((char *)addr + size - 1, 1, &bit);
+	return p && ((*p >> bit) & 1);
 }
 
-static __rte_always_inline void asan_poison_byte(void *addr) {
-    if (IS_ADDR_VALID(addr)) {
-        uint8_t *p = asan_mem2shadow(addr);
-        *p |= 1 << ((uintptr_t)addr & 7);
-    }
+static __rte_always_inline void 
+kasan_set_poison(const void *addr, size_t size, bool poisoned) {
+	os_critical_declare
+	unsigned int bit = 0, nbit;
+	uintptr_t mask, *p;
+
+	os_critical_lock
+	p = kasan_mem_to_shadow(addr, size, &bit);
+	rte_assert(p != NULL);
+	nbit = KASAN_BITS_PER_WORD - bit % KASAN_BITS_PER_WORD;
+	mask = KASAN_FIRST_WORD_MASK(bit);
+
+	size /= KASAN_SHADOW_SCALE;
+	while (size >= nbit) {
+		if (poisoned)
+			*p++ |= mask;
+		else
+			*p++ &= ~mask;
+		
+		bit += nbit;
+		size -= nbit;
+
+		nbit = KASAN_BITS_PER_WORD;
+		mask = UINTPTR_MAX;
+	}
+
+	if (size) {
+		mask &= KASAN_LAST_WORD_MASK(bit + size);
+		if (poisoned)
+			*p |= mask;
+		else
+			*p &= ~mask;
+	}
+	os_critical_unlock
 }
 
-static __rte_always_inline void asan_clear_byte(void *addr) {
-    if (IS_ADDR_VALID(addr)) {
-        uint8_t *p = asan_mem2shadow(addr);
-        *p &= ~(1 << ((uintptr_t)addr & 7));
-    }
+static inline void 
+kasan_check_report(const void *addr, size_t size, bool is_write,
+	void *return_address) {
+	if (kasan_is_poisoned(addr, size))
+		kasan_report(addr, size, is_write, return_address);
 }
 
-static __rte_always_inline int asan_slowpath_check(int8_t shadow, void *addr, 
-    size_t size) {
-    int8_t last = ((uintptr_t)addr & 7) + size;
-    return last >= shadow;
+void kasan_poison(const void *addr, size_t size) {
+	kasan_set_poison(addr, size, true);
 }
 
-/* 
- * Check if we are access to poisoned memory
- */
-static void asan_check(void *addr, size_t size, int access, void *retip) {
-    if (IS_ADDR_VALID(addr)) {
-        int8_t shadow = *asan_mem2shadow(addr);
-        if (rte_unlikely(shadow < 0)) {
-            asan_report_error(addr, size, access, retip);
-        } else if (shadow > 0) {
-            if (rte_unlikely(asan_slowpath_check(shadow, addr, size)))
-                asan_report_error(addr, size, access, retip);
-        }
-    }
+void kasan_unpoison(const void *addr, size_t size) {
+	kasan_set_poison(addr, size, false);
 }
 
-void *asan_alloc_poison(void *ptr, size_t size) {
-  /* 
-   * Allocates the requested amount of memory with redzones around it.
-   * The shadow values corresponding to the redzones are poisoned and the shadow values
-   * for the memory region are cleared.
-   */
-    char *p   = (char *)ptr;
-    char *q   = p + ASAN_REDZONE_SIZE;
-    char *end = p + ASAN_ALLOCSIZE(size);
+void kasan_register(void *addr, size_t *size) {
+	os_critical_declare
+	struct kasan_region *region;
 
-    /*
-        * Poison red zone at the beginning
-        */
-    while (p < q) {
-        asan_poison_byte(p);
-        p++;
-    }
+	region = (struct kasan_region *)((char *)addr + *size - KASAN_REGION_SIZE(*size));
 
-    /*
-     * Store memory size
-     */
-    *(size_t *)p = size;
-    p += sizeof(size_t);
+	region->begin = (uintptr_t)addr;
+	region->end = region->begin + *size;
 
-    /*
-     * Clear valid memory
-     */
-    q = p + size - 1;
-    while (q >= p) {
-        asan_clear_byte(q);
-        q--;
-    }
+	os_critical_lock
+	SLIST_INSERT_HEAD(&kasan_list, region, link);
+	kasan_state = KASAN_INIT_VALUE;
+	os_critical_unlock
 
-    /*
-     * Poison red zone at the end
-     */
-    for (q = p + size; q < end; q++)
-        asan_poison_byte(q);
-    
-    return p;
-}
-
-void *asan_alloc_unpoison(void *ptr) {
-    char  *p = (char *)ptr;
-    char  *q = p - sizeof(size_t);
-    size_t size;
-    
-    /*
-     * Get memory size
-     */
-    size = *(size_t *)q;
-
-    /*
-     * Poison memory area
-     */
-    for (size_t i = 0; i < size; i++)
-        asan_poison_byte(p + i);
-
-    q -= ASAN_REDZONE_SIZE;
-
-    return q;
-}
-
-int asan_init(void *base, size_t size) {
-    if (base == NULL)
-        return -EINVAL;
-
-    if (size > ASAN_MEM_SIZE) {
-        os_panic();
-        return -EINVAL;
-    }
-
-    for (size_t i = 0; i < rte_array_size(shadow_area); i++)
-        shadow_area[i] = 0;
-
-    memory_base = (uintptr_t)base;
-
-    return 0;
+	kasan_poison(addr, *size);
+	*size -= KASAN_REGION_SIZE(*size);
 }
 
 /* 
- * Below are the required stub function needed by ASAN 
+ * Exported functions called from the compiler generated code 
  */
-void __asan_report_store1(void *addr) {
-    __asan_report_error();
+void __sanitizer_annotate_contiguous_container(const void *beg, const void *end,
+	const void *old_mid, const void *new_mid) {
+	/* Shut up compiler complaints */
 }
 
-void __asan_report_store2(void *addr) {
-    __asan_report_error();
-}
-
-void __asan_report_store4(void *addr) {
-    __asan_report_error();
-}
-
-void __asan_report_store_n(void *addr, ssize_t size) {
-    __asan_report_error();
-}
-
-void __asan_report_load1(void *addr) {
-    __asan_report_error();
-}
-
-void __asan_report_load2(void *addr) {
-    __asan_report_error();
-}
-
-void __asan_report_load4(void *addr) {
-    __asan_report_error();
-}
-
-void __asan_report_load_n(void *addr, ssize_t size) {
-    __asan_report_error();
-}
-
-void __asan_stack_malloc_1(size_t size, void *addr) { 
-    __asan_report_error(); 
-}
-
-void __asan_stack_malloc_2(size_t size, void *addr) {
-    __asan_report_error(); 
-}
-
-void __asan_stack_malloc_3(size_t size, void *addr) { 
-    __asan_report_error(); 
-}
-
-void __asan_stack_malloc_4(size_t size, void *addr) { 
-    __asan_report_error();
-}
-
-void __asan_handle_no_return(void) { 
-    __asan_report_error(); 
-}
-
-void __asan_option_detect_stack_use_after_return(void) { 
-    __asan_report_error(); 
-}
-
-void __asan_register_globals(void *addr, ssize_t size) {
-    (void) addr;
-    (void) size;
-    __asan_report_error(); 
-}
-
-void __asan_unregister_globals(void *addr, ssize_t size) {
-    (void) addr;
-    (void) size;
-    __asan_report_error(); 
-}
-
-void __asan_version_mismatch_check_v8(void) { 
-    __asan_report_error(); 
-}
-
-void __asan_loadN_noabort(void *addr, ssize_t size) {
-#ifndef CONFIG_ASAN_LOAD_DISABLE
-    while (size >= 8) {
-        asan_check(addr, 8, ASAN_READ, RTE_RET_IP);
-        addr = (char *)addr + 8;
-        size -= 8;
-    }
-    if (size > 0)
-        asan_check(addr, size, ASAN_READ, RTE_RET_IP);
-#endif
-}
-
-void __asan_storeN_noabort(void *addr, ssize_t size) {
-    while (size >= 8) {
-        asan_check(addr, 8, ASAN_WRITE, RTE_RET_IP);
-        addr = (char *)addr + 8;
-        size -= 8;
-    }
-    if (size > 0)
-        asan_check(addr, size, ASAN_WRITE, RTE_RET_IP);
-}
-
-void __asan_load16_noabort(void *addr) {
-#ifndef CONFIG_ASAN_LOAD_DISABLE
-    asan_check(addr, 8, ASAN_READ, RTE_RET_IP);
-    asan_check((char *)addr + 8, 8, ASAN_READ, RTE_RET_IP);
-#endif
-}
-
-void __asan_store16_noabort(void *addr) {
-    asan_check(addr, 8, ASAN_WRITE, RTE_RET_IP);
-    asan_check((char *)addr + 8, 8, ASAN_WRITE, RTE_RET_IP);
-}
-
-void __asan_load8_noabort(void *addr) {
-#ifndef CONFIG_ASAN_LOAD_DISABLE
-    asan_check(addr, 8, ASAN_READ, RTE_RET_IP);
-#endif
-}
-
-void __asan_store8_noabort(void *addr) {
-    asan_check(addr, 8, ASAN_WRITE, RTE_RET_IP);
-}
-
-void __asan_load4_noabort(void *addr) {
-#ifndef CONFIG_ASAN_LOAD_DISABLE
-    asan_check(addr, 4, ASAN_READ, RTE_RET_IP);
-#endif
-}
-
-void __asan_store4_noabort(void *addr) {
-    asan_check(addr, 4, ASAN_WRITE, RTE_RET_IP);
-}
-
-void __asan_load2_noabort(void *addr) {
-#ifndef CONFIG_ASAN_LOAD_DISABLE
-    asan_check(addr, 2, ASAN_READ, RTE_RET_IP);
-#endif
-}
-
-void __asan_store2_noabort(void *addr) {
-    asan_check(addr, 2, ASAN_WRITE, RTE_RET_IP);
-}
-
-void __asan_load1_noabort(void *addr) {
-#ifndef CONFIG_ASAN_LOAD_DISABLE
-    asan_check(addr, 1, ASAN_READ, RTE_RET_IP);
-#endif
-}
-
-void __asan_store1_noabort(void *addr) {
-    asan_check(addr, 1, ASAN_WRITE, RTE_RET_IP);
-}
-
-void __asan_before_dynamic_init(const void *addr) {
-
+void __asan_before_dynamic_init(const void *module_name) {
+	/* Shut up compiler complaints */
 }
 
 void __asan_after_dynamic_init(void) {
-
+	/* Shut up compiler complaints */
 }
+
+void __asan_handle_no_return(void) {
+	/* Shut up compiler complaints */
+}
+
+void __asan_report_load_n_noabort(void *addr, size_t size) {
+	kasan_report(addr, size, false, RTE_RET_IP);
+}
+
+void __asan_report_store_n_noabort(void *addr, size_t size) {
+	kasan_report(addr, size, true, RTE_RET_IP);
+}
+
+void __asan_loadN_noabort(void *addr, size_t size) {
+	kasan_check_report(addr, size, false, RTE_RET_IP);
+}
+
+void __asan_storeN_noabort(void *addr, size_t size) {
+	kasan_check_report(addr, size, true, RTE_RET_IP);
+}
+
+void __asan_loadN(void *addr, size_t size) {
+	kasan_check_report(addr, size, false, RTE_RET_IP);
+}
+
+void __asan_storeN(void *addr, size_t size) {
+	kasan_check_report(addr, size, true, RTE_RET_IP);
+}
+
+#define DEFINE_ASAN_LOAD_STORE(size)                                                     \
+	void __asan_report_load##size##_noabort(void *addr) {                                \
+		kasan_report(addr, size, false, RTE_RET_IP);                              \
+	}                                                                                    \
+	void __asan_report_store##size##_noabort(void *addr) {                               \
+		kasan_report(addr, size, true, RTE_RET_IP);                               \
+	}                                                                                    \
+	void __asan_load##size##_noabort(void *addr) {                                       \
+		kasan_check_report(addr, size, false, RTE_RET_IP);                        \
+	}                                                                                    \
+	void __asan_store##size##_noabort(void *addr) {                                      \
+		kasan_check_report(addr, size, true, RTE_RET_IP);                         \
+	}                                                                                    \
+	void __asan_load##size(void *addr) {                                                 \
+		kasan_check_report(addr, size, false, RTE_RET_IP);                        \
+	}                                                                                    \
+	void __asan_store##size(void *addr) {                                                \
+		kasan_check_report(addr, size, true, RTE_RET_IP);                         \
+	}
+
+DEFINE_ASAN_LOAD_STORE(1)
+DEFINE_ASAN_LOAD_STORE(2)
+DEFINE_ASAN_LOAD_STORE(4)
+DEFINE_ASAN_LOAD_STORE(8)
+DEFINE_ASAN_LOAD_STORE(16)
