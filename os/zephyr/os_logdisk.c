@@ -110,7 +110,7 @@ int __rte_notrace platform_extend_filesystem_init(int fs_type) {
     const struct disk_partition *fpt;
     struct disk_partition dpobj;
 		size_t limit;
-    int err = -EINVAL;
+    int err = 0;
     
     (void) fs_type;
     for (int i = 0, lfs = 0, fat = 0; i < FS_NUMBER; i++) {

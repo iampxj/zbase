@@ -1,8 +1,7 @@
 if (CONFIG_KASAN)
 zephyr_library_named(xdebug)
-
 zephyr_library_compile_options(
-    -fno-sanitize=kernel-address
+    -fno-sanitize=all
     -fno-lto
 )
 

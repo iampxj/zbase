@@ -4,24 +4,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "basework/generic.h"
 #include "basework/os/osapi.h"
-#include "basework/compiler.h"
 #include "basework/assert.h"
 #include "basework/debug/kasan.h"
 #include "basework/container/queue.h"
-
-#define KASAN_BYTES_PER_WORD (sizeof(uintptr_t))
-#define KASAN_BITS_PER_WORD (KASAN_BYTES_PER_WORD * 8)
-
-#define KASAN_FIRST_WORD_MASK(start)                                                     \
-	(UINTPTR_MAX << ((start) & (KASAN_BITS_PER_WORD - 1)))
-#define KASAN_LAST_WORD_MASK(end) (UINTPTR_MAX >> (-(end) & (KASAN_BITS_PER_WORD - 1)))
-
-#define KASAN_SHADOW_SCALE (sizeof(uintptr_t))
-
-#define KASAN_SHADOW_SIZE(size)                                                          \
-	(KASAN_BYTES_PER_WORD * ((size) / KASAN_SHADOW_SCALE / KASAN_BITS_PER_WORD))
-#define KASAN_REGION_SIZE(size) (sizeof(struct kasan_region) + KASAN_SHADOW_SIZE(size))
 
 #define KASAN_INIT_VALUE 0xDEADCAFE
 
@@ -31,6 +18,8 @@ struct kasan_region {
 	uintptr_t end;
 	uintptr_t shadow[1];
 };
+
+STATIC_ASSERT(sizeof(struct kasan_region) == KASAN_REGION_STRUCT_SIZE, "");
 
 static SLIST_HEAD(kasan_list, kasan_region) kasan_list = 
 	SLIST_HEAD_INITIALIZER(kasan_list);
@@ -73,7 +62,7 @@ static void kasan_report(const void *addr, size_t size, bool is_write,
 
 static bool kasan_is_poisoned(const void *addr, size_t size) {
 	uintptr_t *p;
-	unsigned int bit;
+	unsigned int bit = 0;
 
 	p = kasan_mem_to_shadow((char *)addr + size - 1, 1, &bit);
 	return p && ((*p >> bit) & 1);

@@ -81,8 +81,10 @@ iobus_daemon(void *arg) {
         n = kfifo_out(&sq->queue, sqes, rte_array_size(sqes));
         pr_dbg("%s process %d tasks\n", __func__, n);
 
-        for (size_t i = 0; i < n; i++)
+        for (size_t i = 0; i < n; i++) {
             sq->bus_transfer(sqes[i]);
+        }
+
     }
 }
 
@@ -246,6 +248,7 @@ __iobus_burst_submit(struct iobus_sq *sq, struct iobus_sqe **sqes,
         return 0;
     }
     os_critical_unlock
+    rte_assert(0);
 
     return -ENOMEM;
 }
@@ -271,9 +274,9 @@ iobus_burst_submit_wait(struct iobus_device *iodev, struct iobus_sqe **sqes,
     struct iobus_sq *sq = iodev->sq;
     int err;
 
+    os_completion_reinit(&completion);
     sqes[n - 1]->arg  = &completion;
     sqes[n - 1]->done = iobus_done;
-    os_completion_reinit(&completion);
     err = __iobus_burst_submit(sq, sqes, n);
     if (!err)
         err = os_completion_wait(&completion);

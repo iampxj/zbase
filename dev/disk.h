@@ -48,6 +48,11 @@ disk_device_get_block_size(const struct disk_device *dd) {
     return dd->blk_size;
 }
 
+static inline const char * 
+disk_device_get_name(const struct disk_device *dd) {
+    return dd->get_name(dd->dev);
+}
+
 #ifdef __cplusplus
 }
 #endif

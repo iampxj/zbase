@@ -111,7 +111,8 @@ void resource_ext_check(void) {
 	}
 }
 
-static int disk_write_filter(uint32_t offset, size_t len, int *retcode) {
+static int __rte_unused
+disk_write_filter(uint32_t offset, size_t len, int *retcode) {
     uint32_t end = offset + len;
 
     for (uint8_t i = 0; i < ota_partnum; i++) {
@@ -124,13 +125,8 @@ static int disk_write_filter(uint32_t offset, size_t len, int *retcode) {
 }
 
 int ota_write_filter(bool enable) {
-    int err;
-
-    if (!enable)
-        err = RTE_PARAM_WRITE("spi_flash_filter", (void *)0);
-    else
-        err = RTE_PARAM_WRITE("spi_flash_filter", &disk_write_filter);
-    return err;
+    (void) enable;
+    return -ENOSYS;
 }
 
 static uint32_t crc32_update(uint32_t crc, const uint8_t *data, 

@@ -207,11 +207,21 @@ static int __rte_unused ptfs_impl_register(const struct device *dev) {
 
     memset(os_files, 0, sizeof(os_files));
     memset(&ptfs_context, 0, sizeof(ptfs_context));
-#ifdef CONFIG_SPINAND_ACTS
-    err = ptfile_ll_init(PTFS, CONFIG_BLOCK_DEV_FLASH_NAME, offset);
-#else
-    err = ptfile_ll_init(PTFS, CONFIG_SPI_FLASH_NAME, offset);
-#endif
+    switch (parti->storage_id) {
+    case STORAGE_ID_NOR:
+        err = ptfile_ll_init(PTFS, "spi_flash", offset);
+        break;
+    case STORAGE_ID_NAND:
+        err = ptfile_ll_init(PTFS, "spinand", offset);
+        break;
+    case STORAGE_ID_DATA_NOR:
+        err = ptfile_ll_init(PTFS, "spi_flash_2", offset);
+        break;
+    default:
+        err = -EINVAL;
+        os_panic();
+        break;
+    }
     if (err)
         return err;
     pr_notice("## partition filesystem registed start(0x%x) size(%d)\n", 

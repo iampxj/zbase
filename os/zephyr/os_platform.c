@@ -305,7 +305,7 @@ static int os_early_platform_init(const struct device *dev __rte_unused) {
     pr_log_init(&log_printer);
     return 0;
 }
-SYS_INIT(os_early_platform_init, PRE_KERNEL_2, 10);
+SYS_INIT(os_early_platform_init, PRE_KERNEL_1, 1);
 
 /*
  * Platform Device

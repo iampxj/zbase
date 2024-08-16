@@ -31,12 +31,13 @@ struct parition_data {
 };
 
 static int global_partiton_find(const char *name, int file_id,
-    struct parition_data *p) {
+    struct parition_data *p, const char **devn) {
     if (name != NULL) {
         const struct disk_partition *dp = disk_partition_find(name);
         if (dp != NULL) {
             p->start = dp->offset;
             p->size  = dp->len;
+            *devn = dp->parent;
             return 0;
         }
     }
@@ -46,6 +47,21 @@ static int global_partiton_find(const char *name, int file_id,
     if (!parti) {
         pr_err("Not found global parition\n");
         return -ENOENT;
+    }
+    switch (parti->storage_id) {
+    case STORAGE_ID_NOR:
+        *devn = "spi_flash";
+        break;
+    case STORAGE_ID_NAND:
+        *devn = "spinand";
+        break;
+    case STORAGE_ID_DATA_NOR:
+        *devn = "spi_flash_2";
+        break;
+    default:
+        pr_err("Invalid storage media(%d)\n", (int)parti->storage_id);
+        os_panic();
+        break;
     }
     p->start = parti->offset;
     p->size  = parti->size;
@@ -96,8 +112,9 @@ static int global_partiton_find(const char *name, int file_id,
                                                                \
     static int RTE_JOIN(name, _ptfs_register)(const struct device *dev) {   \
         struct parition_data pt;                                                \
-        if (!global_partiton_find(ptname, fileid, &pt)) {                       \
-            int err = pt_file_init(&RTE_JOIN(name, _pt_context), PTFS_STORAGE_MEDIA, \
+        const char *devname = NULL;                                             \
+        if (!global_partiton_find(ptname, fileid, &pt, &devname)) {             \
+            int err = pt_file_init(&RTE_JOIN(name, _pt_context), devname,       \
                 pt.start, pt.size, 4096, maxfiles, maxlimit, bio);              \
             if (err) {                                                          \
                 pr_err("PT filesystem initialize failed(%d)\n", err);           \

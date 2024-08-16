@@ -5,11 +5,19 @@ zephyr_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../
 )
 
+if (CONFIG_KASAN)
+    add_library(kasan INTERFACE )
+    target_compile_options(kasan
+        INTERFACE
+        -fsanitize=kernel-address
+    )
+    target_link_libraries(basework PRIVATE kasan)
+endif(CONFIG_KASAN)
+
 if (CONFIG_FTRACE)
     add_library(fntrace INTERFACE)
     target_compile_options(fntrace
         INTERFACE
-        $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:ARMClang>>:-finstrument-functions>
         $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:ARMClang>>:-finstrument-functions>
     )
     target_link_libraries(basework PRIVATE fntrace)
@@ -70,4 +78,3 @@ endif()
 endif(NOT CONFIG_BOOTLOADER)
 
 add_subdirectory_ifdef(CONFIG_BOOTLOADER boot)
-
