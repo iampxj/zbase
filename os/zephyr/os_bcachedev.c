@@ -11,6 +11,7 @@
 #include <drivers/flash.h>
 
 #include "basework/generic.h"
+#include "basework/malloc.h"
 #include "basework/dev/bcache.h"
 #include "basework/dev/partition.h"
 #include "basework/dev/disk.h"
@@ -63,36 +64,55 @@ flash_io_request(struct flash_context *ctx, struct bcache_request *r,
 static int 
 flash_driver_entry(struct bcache_device *dd, uint32_t req, void *argp) {
 	struct flash_context *ctx = bcache_disk_get_driver_data(dd);
-	if (req == BCACHE_IO_REQUEST)
+	if (rte_likely(req == BCACHE_IO_REQUEST))
 		return flash_io_request(ctx, argp, dd->block_size);
 
 	return bcache_ioctl(dd, req, argp);
 }
 
-static int flash_driver_init(const struct device *dev) {
-	static struct flash_context media;
-	const struct disk_partition *part;
-	(void) dev;
+static int
+blkdev_register(const char *devname) {
+	struct disk_device *dd;
+	int err;
 
-	part = disk_partition_find("firmware");
-	if (!part)
-		return -ENODEV;
-
-	media.dev = device_get_binding("spi_nand");
-	if (media.dev) {
-		size_t blksize = disk_device_find_by_part(part)->blk_size;
-		media.start = part->offset;
-		media.size = part->len;
-		media.blksize = (blksize < 2048)? 2048: blksize;
-		return bcache_dev_create("spi_nand", 
-			media.blksize,
-			media.size / media.blksize, 
-			flash_driver_entry,
-			&media,
-			NULL
-		);
+	err = disk_device_open(devname, &dd);
+	if (!err) {
+		struct flash_context *media;
+		media = general_malloc(sizeof(*media));
+		if (media) {
+			media->dev = (struct device *)dd->dev;
+			media->start = dd->addr;
+			media->size = dd->len;
+			media->blksize = (dd->blk_size < 2048)? 2048: dd->blk_size;
+			int err = bcache_blkdev_create(devname,
+				media->blksize,
+				media->size / media->blksize, 
+				flash_driver_entry,
+				media,
+				NULL
+			);
+			if (err) {
+				pr_err("create bcache device(start: 0x%x size:0x%x blksize:%x) failed(%d)\n", 
+					media->start, media->size, media->blksize, err);
+				general_free(media);
+				return err;
+			}
+		}
 	}
 	return -EINVAL;
+}
+
+static int flash_driver_init(const struct device *dev) {
+	(void) dev;
+	const char *devlist[] = {
+		"spi_flash", "spinand", "spi_flash_2"
+	};
+
+	for (int i = 0; i < (int)rte_array_size(devlist); i++) {
+		if (blkdev_register(devlist[i]))
+			pr_err("Register bcache-device(%s) failed\n", devlist[i]);
+	}
+	return 0;
 }
 
 const struct bcache_config bcache_configuration = {
@@ -110,4 +130,4 @@ const struct bcache_config bcache_configuration = {
 	.read_ahead_priority = 8
 };
 
-SYS_INIT(flash_driver_init, APPLICATION, 50);
+SYS_INIT(flash_driver_init, APPLICATION, 10);

@@ -212,7 +212,7 @@ static int __rte_unused ptfs_impl_register(const struct device *dev) {
         err = ptfile_ll_init(PTFS, "spi_flash", offset);
         break;
     case STORAGE_ID_NAND:
-        err = ptfile_ll_init(PTFS, "spinand", offset);
+        err = ptfile_ll_init(PTFS, "spinand_flash", offset);
         break;
     case STORAGE_ID_DATA_NOR:
         err = ptfile_ll_init(PTFS, "spi_flash_2", offset);

@@ -14,6 +14,9 @@
 #include <stdint.h>
 #include <string.h>
 
+// #ifdef CONFIG_BCACHE
+#include "basework/dev/bcache.h"
+// #endif
 #include "basework/dev/ptfs_ext.h"
 #include "basework/dev/disk.h"
 #include "basework/dev/blkdev.h"
@@ -76,6 +79,9 @@ struct ptfs_observer {
     ctx->flush(ctx)
 
 
+/*
+ * For lite
+ */
 static ssize_t ptblk_bread(struct ptfs_class *ctx, void *buf, size_t size, 
     uint32_t offset) {
     return buffered_read(ctx->bio, buf, size, offset);
@@ -90,6 +96,9 @@ static int ptblk_bflush(struct ptfs_class *ctx) {
     return buffered_ioflush(ctx->bio, false);
 }
 
+/*
+ * For blkdev
+ */
 static ssize_t ptblk_read(struct ptfs_class *ctx, void *buf, size_t size, 
     uint32_t offset) {
     return blkdev_read(ctx->dd, buf, size, offset);
@@ -103,6 +112,25 @@ static ssize_t ptblk_write(struct ptfs_class *ctx, const void *buf, size_t size,
 static int ptblk_flush(struct ptfs_class *ctx) {
     return blkdev_sync();
 }
+
+/*
+ * For bcache 
+ */
+#ifdef CONFIG_BCACHE
+static ssize_t bcache_blk_read(struct ptfs_class *ctx, void *buf, size_t size, 
+    uint32_t offset) {
+    return bcache_blkdev_read(ctx->bdev, buf, size, offset);
+}
+
+static ssize_t bcache_blk_write(struct ptfs_class *ctx, const void *buf, size_t size, 
+    uint32_t offset) {
+    return bcache_blkdev_write(ctx->bdev, buf, size, offset);
+}
+
+static int bcache_blk_flush(struct ptfs_class *ctx) {
+    return bcache_syncdev(ctx->bdev);
+}
+#endif /* CONFIG_BCACHE */
 
 static uint32_t log2_u32(uint32_t val) {
     if (val == 0)
@@ -119,7 +147,7 @@ static uint32_t log2_u32(uint32_t val) {
 }
 
 static inline void do_dirty(struct ptfs_class *ctx, bool force) {
-    if (force)
+    if (force && ctx->io != PTFS_IO_BCACHE)
         os_timer_mod(ctx->timer, PTFS_SYNC_PERIOD);
 }
 
@@ -586,7 +614,7 @@ static int shutdown_listen(struct observer_base *nb,
 }
 
 int pt_file_init(struct ptfs_class *ctx, const char *name, uint32_t start, 
-    size_t size, size_t blksize, size_t maxfiles, uint32_t maxlimit, bool bio) {
+    size_t size, size_t blksize, size_t maxfiles, uint32_t maxlimit, int iotype) {
     static struct ptfs_observer obs = {
         .base = {
             .update = shutdown_listen,
@@ -621,26 +649,48 @@ int pt_file_init(struct ptfs_class *ctx, const char *name, uint32_t start,
 
     MTX_INIT(ctx->mtx);
     MTX_LOCK(ctx->mtx);
-    err = os_timer_create(&ctx->timer, pt_file_sync, 
-        ctx, false);
-    rte_assert(err == 0);
 
-    if (bio) {
+    if (iotype != PTFS_IO_BCACHE) {
+        err = os_timer_create(&ctx->timer, pt_file_sync, 
+            ctx, false);
+        rte_assert(err == 0);
+    }
+
+    if (iotype == PTFS_IO_BLOCK) {
+        ctx->read       = ptblk_read;
+        ctx->write      = ptblk_write;
+        ctx->flush      = ptblk_flush;
+    } else if (iotype == PTFS_IO_LITE) {
         size_t devblksz = disk_device_get_block_size(ctx->dd);
         err = buffered_iocreate(ctx->dd, devblksz, false, &ctx->bio);
         if (err) {
             pr_err("Create buffered-I/O failed(%d)\n", err);
             return err;
         }
-        ctx->read       = ptblk_bread;
-        ctx->write      = ptblk_bwrite;
-        ctx->flush      = ptblk_bflush;
-    } else {
-        ctx->read       = ptblk_read;
-        ctx->write      = ptblk_write;
-        ctx->flush      = ptblk_flush;
+        ctx->read   = ptblk_bread;
+        ctx->write  = ptblk_bwrite;
+        ctx->flush  = ptblk_bflush;
     }
 
+#ifdef CONFIG_BCACHE 
+    else if (iotype == PTFS_IO_BCACHE) {
+        ctx->bdev   = bcache_blkdev_find(name);
+        if (ctx->bdev == NULL) {
+            pr_err("Not found bcache-device(%s)\n", name);
+            rte_assert0(0);
+        }
+
+        ctx->read   = bcache_blk_read;
+        ctx->write  = bcache_blk_write;
+        ctx->flush  = bcache_blk_flush;
+    }
+#endif /* CONFIG_BCACHE */
+    else {
+        pr_err("Unknown I/O type(%d)\n", iotype);
+        rte_assert0(0);
+    }
+
+    ctx->io = (uint8_t)iotype;
     if (start == UINT32_MAX)
         ctx->offset = ctx->dd->addr;
     else

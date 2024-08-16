@@ -17,6 +17,7 @@
 #ifndef BASEWORK_DEV_BCACHE_H_
 #define BASEWORK_DEV_BCACHE_H_
 
+#include <sys/types.h>
 #include "basework/container/list.h"
 
 #ifdef __cplusplus
@@ -173,12 +174,17 @@ int bcache_ioctl(struct bcache_device *dd, uint32_t req, void *argp);
  *
  * @retval 0 Successful operation.
  */
-int bcache_dev_create(const char *device, uint32_t media_block_size,
+int bcache_blkdev_create(const char *device, uint32_t media_block_size,
 					  bcache_num_t media_block_count, bcache_device_ioctl handler,
 					  void *driver_data, struct bcache_device **dd);
 
-struct bcache_device* bcache_dev_find(const char* device);
-
+struct bcache_device* bcache_blkdev_find(const char* device);
+ssize_t bcache_blkdev_write(struct bcache_device *dd, const void *buffer,
+	size_t count, off_t offset);
+ssize_t bcache_blkdev_read(struct bcache_device *dd, void *buffer, 
+	size_t count, off_t offset);
+int bcache_blkdev_ioctl(struct bcache_device *dd, unsigned int request,
+	void *buffer);
 
 /**
  * @brief Prints the block device statistics.

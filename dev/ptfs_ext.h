@@ -16,6 +16,15 @@ extern "C"{
 struct pt_inode;
 struct file_metadata;
 struct buffered_io;
+struct bcache_device;
+
+/*
+ * I/O list
+ */
+#define PTFS_IO_BLOCK   0
+#define PTFS_IO_LITE    1
+#define PTFS_IO_BCACHE  2
+
 
 struct pt_file {
     struct file_metadata *pmeta;
@@ -39,7 +48,10 @@ struct ptfs_class {
 
     os_mutex_t            mtx;
     struct disk_device   *dd;
-    struct buffered_io   *bio;
+    union {
+        struct buffered_io   *bio;
+        struct bcache_device *bdev;
+    };
     void                 *buffer;
     os_timer_t            timer;
     size_t                maxfiles;
@@ -48,6 +60,7 @@ struct ptfs_class {
     size_t                size;
     uint32_t              offset; /* content offset */
     bool                  dirty;
+    uint8_t               io;
 
     /* 
      * Read data from block device 
@@ -91,7 +104,7 @@ const char *pt_file_getname(struct ptfs_class *ctx, int *idx);
 void pt_file_reset(struct ptfs_class *ctx);
 
 int pt_file_init(struct ptfs_class *ctx, const char *name, uint32_t start, 
-    size_t size, size_t blksize, size_t maxfiles, uint32_t maxlimit, bool bio);
+    size_t size, size_t blksize, size_t maxfiles, uint32_t maxlimit, int iotype);
 
 
 

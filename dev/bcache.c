@@ -2671,7 +2671,7 @@ bcache_disk_init_log(struct bcache_device *dd,
 }
 
 ssize_t 
-bcache_dev_read(struct bcache_device *dd, void *buffer, 
+bcache_blkdev_read(struct bcache_device *dd, void *buffer, 
 	size_t count, off_t offset) {
 	ssize_t remaining = (ssize_t)count;
 	ssize_t block_size = dd->block_size;
@@ -2710,7 +2710,7 @@ bcache_dev_read(struct bcache_device *dd, void *buffer,
 }
 
 ssize_t 
-bcache_dev_write(struct bcache_device *dd, const void *buffer,
+bcache_blkdev_write(struct bcache_device *dd, const void *buffer,
 	size_t count, off_t offset) {
 	ssize_t block_size = dd->block_size;
 	ssize_t remaining = count;
@@ -2752,7 +2752,7 @@ bcache_dev_write(struct bcache_device *dd, const void *buffer,
 }
 
 int 
-bcache_dev_ioctl(struct bcache_device *dd, unsigned int request,
+bcache_blkdev_ioctl(struct bcache_device *dd, unsigned int request,
 	void *buffer) {
 	if (request != BCACHE_IO_REQUEST)
 		return dd->ioctl(dd, request, buffer);
@@ -2760,7 +2760,7 @@ bcache_dev_ioctl(struct bcache_device *dd, unsigned int request,
 }
 
 int 
-bcache_dev_create(const char* device, uint32_t media_block_size,
+bcache_blkdev_create(const char* device, uint32_t media_block_size,
 	bcache_num_t media_block_count, bcache_device_ioctl handler,
 	void* driver_data, struct bcache_device **dd) {
 	struct bcache_devnode *devn;
@@ -2802,7 +2802,7 @@ bcache_dev_create(const char* device, uint32_t media_block_size,
 }
 
 struct bcache_device* 
-bcache_dev_find(const char* device) {
+bcache_blkdev_find(const char* device) {
 	struct rte_list *pos;
 
 	if (device == NULL)
@@ -2880,7 +2880,7 @@ static struct bcache_device *ramdisk_init(void) {
 	static struct ramdisk ramdisk_inst;
 	struct bcache_device *dd;
 
-	bcache_dev_create("ramdisk", 
+	bcache_blkdev_create("ramdisk", 
 		512,
 		sizeof(ramdisk_inst.area) / 512, 
 		ramdisk_driver_entry,
@@ -2903,12 +2903,12 @@ void ramdisk_test(void) {
 	for (size_t i = 0; i < count; i++) {
 		memset(buffer_512b, 0, sizeof(buffer_512b));
 		sprintf(buffer_512b, "bcache test text: %d\n", (int)i);
-		bcache_dev_write(dd, buffer_512b, sizeof(buffer_512b), delta * i);
+		bcache_blkdev_write(dd, buffer_512b, sizeof(buffer_512b), delta * i);
 	}
 
 	for (size_t i = 0; i < count; i++) {
 		memset(buffer_512b, 0, sizeof(buffer_512b));
-		bcache_dev_read(dd, buffer_512b, 200, delta * i);
+		bcache_blkdev_read(dd, buffer_512b, 200, delta * i);
 		printf("Read(%d): %s\n", 0, buffer_512b);
 	}
 

@@ -53,7 +53,7 @@ static int global_partiton_find(const char *name, int file_id,
         *devn = "spi_flash";
         break;
     case STORAGE_ID_NAND:
-        *devn = "spinand";
+        *devn = "spinand_flash";
         break;
     case STORAGE_ID_DATA_NOR:
         *devn = "spi_flash_2";
