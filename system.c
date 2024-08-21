@@ -24,11 +24,13 @@
 #define SYS_RECOVERY_THRESHOLD 2
 #endif
 
-#if defined (__ZEPHYR__)
-static struct nvram_desc nvram_region __rte_section(".noinit.system.nvram");
+#ifdef CONFIG_SYS_NVRAM_ATTRIBUTE
+#define _NVRAM_ATTRIBUTE __rte_section(CONFIG_SYS_NVRAM_ATTRIBUTE)
 #else
-static struct nvram_desc nvram_region;
+#define _NVRAM_ATTRIBUTE __rte_section(".noinit.system.nvram")
 #endif
+
+static struct nvram_desc nvram_region _NVRAM_ATTRIBUTE;
 
 #define CRASH_HEADER 0xaccedcaf
 #define CRASH_TIMEOUT 60  /* seconds */ 

@@ -27,10 +27,6 @@ zephyr_library_sources_ifdef(CONFIG_MSG_FILE_BACKEND
     ${CMAKE_CURRENT_SOURCE_DIR}/msg_file_backend.c
 )
 
-zephyr_library_sources_ifdef(CONFIG_COMPRESS_LZ4
-    ${CMAKE_CURRENT_SOURCE_DIR}/lz4.c
-)
-
 zephyr_library_sources_ifndef(CONFIG_BOOTLOADER
     ${CMAKE_CURRENT_SOURCE_DIR}/disklog.c
 )

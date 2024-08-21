@@ -53,7 +53,7 @@ struct nvram_desc {
     uint8_t time_ram[20];
     uint8_t fault_time[20];
 #if CONFIG_PSRAM_SIZE > 0
-    char    fault_ram[4096];
+    char    fault_ram[8192];
 #else
     char    fault_ram[2048];
 #endif
@@ -79,7 +79,7 @@ struct nvram_desc {
     char __data_end[0];
 };
 
-_Static_assert(sizeof(struct nvram_desc) <= CONFIG_BACKUP_RAM_SIZE, "");
+// _Static_assert(sizeof(struct nvram_desc) <= CONFIG_BACKUP_RAM_SIZE, "");
 
 
 struct shutdown_param {

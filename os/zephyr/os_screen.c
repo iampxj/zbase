@@ -28,7 +28,6 @@
 /* Wait for view_delete operation to complete */
 #define STADNBY_EXTRA_DELAY  CONFIG_SCREEN_POST_DELAY
 #define ZERO_BRIGHTNESS  0
-#define USE_SCREEN_COVER 1
 
 static os_timer_t timer;
 static const struct device *screen_dev, *tp_dev;
@@ -45,9 +44,9 @@ static uint16_t mid_brightness = MIDDLE_BRIGHTNESS;
 static uint32_t sleep_timestamp;
 #endif
 
-#if USE_SCREEN_COVER
+
 static bool m_cover_status;
-#endif
+
 
 #ifdef CONFIG_FADE_LOW_POWER
 
@@ -120,32 +119,42 @@ static bool is_sleep_timeout(void) {
 
 static void timer_cb(os_timer_t timer, void *arg) {
     (void) arg;
-#if USE_SCREEN_COVER
+
 	if (!m_cover_status) {
     	pr_dbg("##tp active screen\n");
     	screen_active_ext(SCREEN_ON_DEFAULT, SCREEN_EVSRC_TP);
 	} else {
 		m_cover_status = false;
-		//screen_deactive();
+		#ifdef CONFIG_USE_SCREEN_COVER
+		screen_deactive();
+		#endif
 	}
     atomic_set(&screen_pending, 0);	
     pr_dbg("tp notify => ACTIVE\n");
-#else
-    pr_dbg("tp notify => ACTIVE\n");
-    atomic_set(&screen_pending, 0);
-    screen_active(SCREEN_ON_DEFAULT);
-#endif
+
 }
+
+#ifdef CONFIG_WATER_LOCK_SCREEN 
+void __rte_weak tp_notify_hook(void) {
+	
+}
+#endif
 
 static void tp_notify(struct device *dev, struct input_value *val) {
     (void) dev;
     (void) val;
-#if USE_SCREEN_COVER
+
 	if (val->point.gesture == 0xAA) {
 		system_standby_ioevent_post();
 		m_cover_status = true;
 	}
-#endif
+	#ifdef CONFIG_WATER_LOCK_SCREEN	
+	else if(val->point.gesture == 0xBB){
+		tp_notify_hook();
+	}
+	#endif
+		
+
 #ifdef CONFIG_FADE_LOW_POWER
     if (time_update && te_need_restore)
         return;

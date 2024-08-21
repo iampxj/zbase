@@ -14,9 +14,9 @@
 #include <stdint.h>
 #include <string.h>
 
-// #ifdef CONFIG_BCACHE
+#ifdef CONFIG_BCACHE
 #include "basework/dev/bcache.h"
-// #endif
+#endif
 #include "basework/dev/ptfs_ext.h"
 #include "basework/dev/disk.h"
 #include "basework/dev/blkdev.h"
@@ -703,6 +703,10 @@ int pt_file_init(struct ptfs_class *ctx, const char *name, uint32_t start,
     ctx->log2_blksize   = log2_u32(blksize);
     ctx->i_bitmap_count = (ctx->inodes + 31) / 32;
     ctx->f_bitmap_count = (ctx->maxfiles + 31) / 32;
+
+    //TODO: fix the maximum limited of file size 
+    if (ctx->inodes > UINT8_MAX)
+        ctx->inodes = UINT8_MAX;
 
     slot_size  = sizeof(struct file_metadata *) * maxfiles;
     alloc_size = sizeof(struct pt_inode) + 

@@ -42,4 +42,8 @@ config LUA_DEBUG
 endif #LUA
 
 
+menuconfig LZ4
+    bool "Enable LZ4 compression"
+    default y
+
 endmenu

@@ -9,7 +9,8 @@ if (CONFIG_KASAN)
     add_library(kasan INTERFACE )
     target_compile_options(kasan
         INTERFACE
-        -fsanitize=kernel-address
+        $<$<CXX_COMPILER_ID:GNU>:-fsanitize=kernel-address>
+        $<$<CXX_COMPILER_ID:ARMClang>:-fsanitize=address>
     )
     target_link_libraries(basework PRIVATE kasan)
 endif(CONFIG_KASAN)

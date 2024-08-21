@@ -57,15 +57,16 @@ struct redzone_header {
 
 #define _redzone_end(r) *(uint32_t *)((r)->data + (r)->size)
 #define to_redzone(_ptr) ((struct redzone_header *)(_ptr) - 1)
-#define redzone_head_error(r) ((r)->marker != REDZONE_HEAD)
-#define redzone_tail_error(r) (_redzone_end(r) != REDZONE_TAIL)  
+#define redzone_head_error(r) if ((r)->marker != REDZONE_HEAD)
+#define redzone_tail_error(r) if (_redzone_end(r) != REDZONE_TAIL)  
 
-#define redzone_data(r) (r)->data
+#define redzone_data(r) ((struct redzone_header *)(r))->data
 #define redzone_fill(r, _size)                                                           \
 	do {                                                                                 \
-		(r)->marker = REDZONE_HEAD;                                                      \
-		(r)->size = REDZONE_ALIGN_SIZE(_size);                                           \
-		_redzone_end(r) = REDZONE_TAIL;                                                  \
+        struct redzone_header *__r = (struct redzone_header *)(r);                       \
+		__r->marker = REDZONE_HEAD;                                                      \
+		__r->size = REDZONE_ALIGN_SIZE(_size);                                           \
+		_redzone_end(__r) = REDZONE_TAIL;                                                \
 	} while (0)
 
 	uint32_t marker;
