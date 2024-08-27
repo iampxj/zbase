@@ -25,7 +25,11 @@
 #include "basework/container/queue.h"
 #include "basework/lib/crc.h"
 #include "basework/lib/string.h"
-#include "basework/lib/lz4.h"
+
+#ifdef CONFIG_SIMULATOR
+#define lz4_namespace_h_
+#endif
+#include "basework/thirdparty/lz4/lz4.h"
 #include "basework/misc/workout_spdata.h"
 #include "basework/misc/workout_dataimpl.h"
 
@@ -164,8 +168,12 @@ static ssize_t queue_get_data(struct data_queue *q, void **buf) {
         p = general_malloc(q->bufsize + sizeof(*p));
         if (p == NULL) 
             return -ENOMEM;
-        
-        len = LZ4_compress_fast(qbuf, (char *)(p + 1), qlen, q->bufsize, 1);
+
+#ifdef CONFIG_SIMULATOR
+		len = LZ4_compress_fast(qbuf, (char *)(p + 1), qlen, q->bufsize, 1);
+#else
+        len = lz4_compress_fast(qbuf, (char *)(p + 1), qlen, q->bufsize, 1);
+#endif
         if (len == 0) {
             pr_err("compress %d bytes failed(%d)\n", qlen, len);
             general_free(p);
@@ -661,7 +669,11 @@ int spfile_read(void *fd, void *buffer, size_t size) {
         if (ret < 0)
             return ret;
 
-        ret = LZ4_decompress_safe (p, buffer, comp_hdr.dst_size, size);
+#ifdef CONFIG_SIMULATOR
+		ret = LZ4_decompress_safe(p, buffer, comp_hdr.dst_size, size);
+#else
+        ret = lz4_decompress_safe (p, buffer, comp_hdr.dst_size, size);
+#endif
         pr_dbg("decompress %d bytes -> %d bytes\n", comp_hdr.dst_size, ret);
     } else {
         ret = vfs_read(file->fd, buffer, size);

@@ -50,15 +50,17 @@ const char *ptfs_get_filename(const char *name) {
 static int ptfs_impl_open(os_file_t fd, const char *path, 
     int flags, va_list ap) {
     struct file *fp = (struct file *)fd;
-    const char *fname = ptfs_get_filename(path);
+    const char *fname;
+    int err = 0;
+
+    fname = ptfs_get_filename(path);
     if (!fname)
         return -EINVAL;
     
     (void) ap;
-    fp->fp = ptfile_ll_open(PTFS, fname, flags);
-    if (!fp->fp)
-        return -1;
-    return 0;
+    fp->fp = ptfile_ll_open(PTFS, fname, flags, &err);
+
+    return err;
 }
 
 static int ptfs_impl_close(os_file_t fd) {

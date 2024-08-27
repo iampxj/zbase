@@ -63,7 +63,7 @@ struct ptfs_context {
 };
 
 struct ptfs_file *ptfile_ll_open(struct ptfs_context *ctx,
-    const char *name, int mode);
+    const char *name, int mode, int *perr);
 ssize_t ptfile_ll_read(struct ptfs_context *ctx, struct ptfs_file *filp, 
     void *buffer, size_t size);
 ssize_t ptfile_ll_write(struct ptfs_context *ctx, struct ptfs_file *filp, 

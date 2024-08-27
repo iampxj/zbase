@@ -181,28 +181,34 @@ static int curr_avaliable_space(struct ptfs_context *ctx,
 }
 
 struct ptfs_file *ptfile_ll_open(struct ptfs_context *ctx,
-    const char *name, int mode) {
+    const char *name, int mode, int *perr) {
     struct file_metadata *pmeta;
     struct ptfs_file *filp;
     int fidx;
 
     filp = ptfile_allocate(ctx);
-    if (!filp)
+    if (!filp) {
+        *perr = -ENOMEM;
         return NULL;
+    }
 
     MTX_LOCK(ctx->mtx);
     pmeta = file_search(&ctx->inode, name);
     if (!pmeta) {
-        if (!(mode & VFS_O_CREAT))
+        if (!(mode & VFS_O_CREAT)) {
+            *perr = -ENOENT;
             goto _free_fp;
+        }
 
         fidx = fnode_allocate(&ctx->inode);
         if (!fidx) {
             pr_err("allocate file node failed\n");
+            *perr = -EBUSY;
             goto _free_fp;
         }
         if (fidx > CONFIG_PTFS_MAXFILES) {
             pr_err("too many files\n");
+            *perr = -ENFILE;
             fnode_free(&ctx->inode, fidx);
             goto _free_fp;
         }
@@ -213,6 +219,7 @@ struct ptfs_file *ptfile_ll_open(struct ptfs_context *ctx,
         strncpy(pmeta->name, name, MAX_PTFS_FILENAME-1);
     }
 
+    *perr = 0;
     filp->pmeta = pmeta;
     filp->oflags = mode & VFS_O_MASK;
     filp->oflags |= PFLILE_O_FLAGS;

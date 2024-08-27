@@ -135,8 +135,7 @@ static void timer_cb(os_timer_t timer, void *arg) {
 }
 
 #ifdef CONFIG_WATER_LOCK_SCREEN 
-void __rte_weak tp_notify_hook(void) {
-	
+void RTE_WEAKHOOK(tp_notify_hook, void){
 }
 #endif
 

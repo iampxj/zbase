@@ -32,7 +32,7 @@
 #include "basework/assert.h"
 
 struct file_metadata {
-#define MAX_PTFS_FILENAME 64 
+#define MAX_PTFS_FILENAME 48 
     char       name[MAX_PTFS_FILENAME];
     uint32_t   size;
     uint32_t   mtime;
@@ -322,14 +322,14 @@ int pt_file_open(struct ptfs_class *ctx, struct pt_file *filp,
     pmeta = file_search(ctx, name);
     if (!pmeta) {
         if (!(mode & VFS_O_CREAT)) {
-            err = -EPERM;
+            err = -ENOENT;
             goto _unlock;
         }
 
         fidx = fnode_allocate(ctx);
         if (!fidx) {
             pr_err("allocate file node failed\n");
-            err = -ENOMEM;
+            err = -EBUSY;
             goto _unlock;
         }
         if (fidx > (int)ctx->maxfiles) {
