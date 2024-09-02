@@ -16,7 +16,7 @@ extern "C"{
 # define __malloc_family
 #endif 
 
-#if defined(_WIN32) || defined(__linux__)
+#if defined(_WIN32) || defined(__linux__) || defined(__rtems__)
 #include <stdlib.h>
 #define general_malloc(size)    malloc(size)
 #define general_calloc(n, size) calloc(n, size)
