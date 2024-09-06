@@ -38,7 +38,6 @@ zephyr_library_sources_ifndef(CONFIG_BOOTLOADER
     log.c
     fsm.c
     async_call.c
-    param.c
 )
 
 if (NOT CONFIG_BOOTLOADER)
@@ -60,7 +59,7 @@ add_subdirectory(lib)
 add_subdirectory(dev)
 add_subdirectory(os)
 add_subdirectory(utils)
-add_subdirectory(misc)
+# add_subdirectory(misc)
 add_subdirectory_ifndef(CONFIG_BOOTLOADER package)
 add_subdirectory_ifndef(CONFIG_BOOTLOADER thirdparty)
 add_subdirectory_ifdef(CONFIG_BASEWORK_TEST tests)
