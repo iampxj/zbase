@@ -18,31 +18,37 @@ struct gp_entry {
 };
 
 /*
- * gp_load - Load parition informaton from json
+ * gpt_load - Load parition informaton from json
  *
  * @buffer Point to json content
  * return 0 if success
  */
-int gp_load(const char *buffer);
+int gpt_load(const char *buffer);
 
 /*
- * gp_destroy - Destroy partition
+ * gpt_destroy - Destroy partition
  */
-void gp_destroy(void);
+void gpt_destroy(void);
 
 /*
- * gp_find - Find partition entry by name
+ * gpt_find - Find partition entry by name
  *
  * @name parition name
  * return entry if success
  */
-const struct gp_entry *gp_find(const char *name);
+const struct gp_entry *gpt_find(const char *name);
 
 /*
- * gp_dump - Dump parition information
+ * gpt_dump - Dump parition information
  */
-void gp_dump(void);
+void gpt_dump(void);
 
+/*
+ * gpt_signature - Generate partition signature
+ */
+int gpt_signature(
+    int (*signature)(const void *buf, uint32_t size, void *ctx), 
+    void *ctx);
 
 #ifdef __cplusplus
 }

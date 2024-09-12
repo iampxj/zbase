@@ -6,7 +6,6 @@
 
 #include <stddef.h>
 #include "basework/container/queue.h"
-#include "basework/thirdparty/lua/src/lua.h"
 
 #ifdef __cplusplus
 extern "C"{
@@ -22,29 +21,26 @@ struct param_node {
 extern struct param_context *_system__params;
 
 /*
- * Private interface
- */
-int param_context_setval(struct param_context *ctx, const char *name, 
-    char *pval, size_t len);
-int param_context_getval(struct param_context *ctx, const char *name, 
-    char *pval, size_t len);
-
-
-/*
  * Public Interface
  */
-struct param_context *param_context_create(void);
+struct param_context *param_context_find(const char *name);
+int  param_context_create(const char *name, struct param_context **pctx);
 void param_context_delete(struct param_context *ctx);
-int param_context_setstr(struct param_context *ctx, const char *name, 
+int  __param_context_setval(struct param_context *ctx, const char *name, 
+    char *pval, size_t len);
+int  __param_context_getval(struct param_context *ctx, const char *name, 
+    char *pval, size_t len);
+int  param_context_setstr(struct param_context *ctx, const char *name, 
     const char *str);
-int param_context_getstr(struct param_context *ctx, const char *name, 
+int  param_context_getstr(struct param_context *ctx, const char *name, 
     const char **pstr);
-int param_context_remove(struct param_context *ctx, const char *name);
+int  param_context_remove(struct param_context *ctx, const char *name);
 void param_context_clean(struct param_context *ctx);
 void param_context_dump(struct param_context *ctx);
 
 
-int param_init(void);
+int  param_init(void);
+void param_dump_all(void);
 
 static inline void param_clean(void) {
     param_context_clean(_system__params);
@@ -62,19 +58,26 @@ static inline int param_getstr(const char *name, const char **pstr) {
     return param_context_getstr(_system__params, name, pstr); 
 }
 
-#define param_setval(_name, _val, _type) ({ \
+#define param_context_setval(_ctx, _name, _val, _type) ({ \
     _type __uv = _val; \
-    param_context_setval(_system__params, _name, \
+    __param_context_setval(_ctx, _name, \
         (char *)&__uv, sizeof(_type)); \
 })
 
-#define param_getval(_name, _val, _type) ({ \
+#define param_context_getval(_ctx, _name, _val, _type) ({ \
     _type __uv;\
-    int __err = param_context_getval(_system__params,_name, \
+    int __err = __param_context_getval(_ctx,_name, \
         (char *)&__uv, sizeof(_type)); \
     *(_type *)(_val) = __uv; \
     __err; \
 })
+
+#define param_setval(_name, _val, _type) \
+    param_context_setval(_system__params, _name, _val, _type)
+
+#define param_getval(_name, _val, _type) \
+    param_context_getval(_system__params, _name, _val, _type)
+
 
 #ifdef __cplusplus
 }

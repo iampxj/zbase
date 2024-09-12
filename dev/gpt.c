@@ -17,8 +17,8 @@
 #define field_size(type, filed) sizeof(((type *)0)->filed)
 
 struct gp_table {
-    char   version[12];
-    size_t count;
+    char     version[12];
+    uint32_t count;
     struct gp_entry gps[];
 };
 
@@ -43,7 +43,7 @@ get_value(cJSON *js, const char *s, int base, uint32_t *pval) {
 }
 
 const struct gp_entry*
-gp_find(const char *name) {
+gpt_find(const char *name) {
     rte_assert(gp_table != NULL);
     if (name == NULL)
         return NULL;
@@ -55,14 +55,14 @@ gp_find(const char *name) {
     return NULL;
 }
 
-void gp_destroy(void) {
+void gpt_destroy(void) {
     if (gp_table) {
         general_free(gp_table);
         gp_table = NULL;
     }
 }
 
-void gp_dump(void) {
+void gpt_dump(void) {
     struct gp_table *gpt = gp_table;
     const char *devname = "device";
     const char *name = "name";
@@ -107,7 +107,7 @@ void gp_dump(void) {
     }
 }
 
-int gp_load(const char *buffer) {
+int gpt_load(const char *buffer) {
     rte_assert(buffer != NULL);
     struct gp_table *gp_new;
     const char *version;
@@ -117,6 +117,8 @@ int gp_load(const char *buffer) {
     int count;
     int err = 0;
 
+    cJSON_Init();
+    
     root = cJSON_Parse(buffer);
     if (root == NULL) {
         pr_err("Error*** parse failed(%s)\n", cJSON_GetErrorPtr());
@@ -254,7 +256,7 @@ int gp_load(const char *buffer) {
 
     strlcpy(gp_new->version, version, 
         field_size(struct gp_table, version));
-    gp_destroy();
+    gpt_destroy();
     gp_table = gp_new;
     cJSON_Delete(root);
     return 0;
@@ -265,4 +267,22 @@ _failed:
     if (root)
         cJSON_Delete(root);
     return err;
+}
+
+int gpt_signature(
+    int (*signature)(const void *buf, uint32_t size, void *ctx), 
+    void *ctx) {
+    const struct gp_table *gpt = gp_table;
+
+    if (signature == NULL)
+        return -EINVAL;
+
+    if (gpt == NULL)
+        return -EINVAL;
+
+    if (gpt->count == 0)
+        return -EINVAL;
+
+    return signature(gp_table, 
+        sizeof(*gpt) + gpt->count * sizeof(struct gp_entry), ctx);
 }
