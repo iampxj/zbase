@@ -81,7 +81,8 @@ int partitions_configure_build(long base_addr, size_t size,
         }
     }
 
-    err = disk_partition_register(partitions_configure, dp-partitions_configure);
+    err = disk_partition_register(partitions_configure, 
+        dp - partitions_configure);
     if (err) {
         pr_err("partition register failed: %d\n", err);
         return err;
@@ -125,4 +126,16 @@ int logic_partitions_create(const char *ppt, struct disk_partition *sublist) {
     parent->child = sublist;
     __disk_partition_dump("logic partition table", sublist, dp - sublist);
     return 0;
+}
+
+int partitions_configure_rebuild(long base_addr, size_t size, 
+    const char *phydev, bool sequence) {
+    struct disk_partition *dp = partitions_configure;
+
+    while (dp && dp->name) {
+        dp->offset = -1;
+        dp++;
+    }
+    return partitions_configure_build(base_addr, size, 
+        phydev, sequence);
 }

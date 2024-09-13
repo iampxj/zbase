@@ -10,7 +10,9 @@
 extern "C"{
 #endif
 
-struct gp_entry {
+typedef void (*gpt_updated_cb)(void);
+
+struct gpt_entry {
     char     name[32];
     char     parent[16];
     uint32_t offset;
@@ -36,7 +38,7 @@ void gpt_destroy(void);
  * @name parition name
  * return entry if success
  */
-const struct gp_entry *gpt_find(const char *name);
+const struct gpt_entry *gpt_find(const char *name);
 
 /*
  * gpt_dump - Dump parition information
@@ -49,6 +51,11 @@ void gpt_dump(void);
 int gpt_signature(
     int (*signature)(const void *buf, uint32_t size, void *ctx), 
     void *ctx);
+
+/*
+ * gpt_register_update_cb - Register update callback
+ */
+int gpt_register_update_cb(gpt_updated_cb cb);
 
 #ifdef __cplusplus
 }

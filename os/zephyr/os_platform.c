@@ -4,6 +4,7 @@
  * OS adapt layer for zephyr
  */
 
+#include "basework/dev/gpt.h"
 #ifdef CONFIG_HEADER_FILE
 #include CONFIG_HEADER_FILE
 #endif
@@ -434,30 +435,66 @@ static void __rte_unused __rte_notrace partition_iterator(const char *name, uint
     }
 }
 
-static int __rte_unused __rte_notrace platform_partition_init(void) {
-    extern int usr_partition_init(void);
-    struct pt_arg ptarg = {0};
-    int err;
+static void gpt_update_notify(void) {
+    extern int usr_partition_init(bool reinit);
+    const struct gpt_entry *gpe;
+    static bool first = true;
 
-    partition_iterate(partition_iterator, &ptarg);
-    if (ptarg.parent == NULL) {
-        //TODO: Just only for test. If user partition is valid then remove it
-        printk("*** Not found user partition and restore default settings\n");
-        ptarg.parent = CONFIG_SPI_FLASH_NAME;
-        ptarg.offset = 0x1B00000; /* U is 2MB*/
-        ptarg.len = 0x500000; 
-        // return -EINVAL;
+    gpe = gpt_find("reserved");
+    rte_assert0(gpe != NULL);
+
+    printk("Paritiion build: device(%s) offset(0x%x) size(%x) first(%d)\n",
+        gpe->parent, (size_t)gpe->offset, gpe->size, (int)first);
+
+    if (first) {
+        err = partitions_configure_build(gpe->offset, 
+            gpe->size, gpe->parent, false);
+        rte_assert0(err == 0);
+        err = usr_partition_init(false);
+        rte_assert0(err == 0);
+        first = false;
+    } else {
+        k_sched_lock();
+        err = partitions_configure_rebuild(gpe->offset, 
+            gpe->size, gpe->parent, false);
+        rte_assert0(err == 0);
+        err = usr_partition_init(true);
+        rte_assert0(err == 0);
+        k_sched_unlock();
     }
+}
 
-    printk("Paritiion build: device(%s) offset(0x%x) size(%x)\n",
-        ptarg.parent, (size_t)ptarg.offset, ptarg.len);
-    err = partitions_configure_build(ptarg.offset, 
-        ptarg.len, ptarg.parent, false);
-    assert(err == 0);
-    if (err)
-        printk("Create parttion failed(%d)\n", err);
-    err |= usr_partition_init();
-    return err;
+static int __rte_unused __rte_notrace platform_partition_init(void) {
+    const struct partition_entry *pe;
+    struct disk_device *dd = NULL;
+    size_t max_buflen = 4096;
+    char *buf;
+    int ret;
+
+    //TODO: find gpt parititon 
+    pe = parition_get_entry2(STORAGE_ID_NOR, /* TODO: */);
+    rte_assert0(pe != NULL);
+
+    if (pe->storage_id == STORAGE_ID_NOR)
+        disk_device_open("spi_flash", &dd);
+    else if (pe->storage_id == STORAGE_ID_NAND)
+        disk_device_open("spinand", &dd);
+    else if (pe->storage_id == STORAGE_ID_DATA_NOR)
+        disk_device_open("spi_flash_2", &dd);
+    rte_assert0(dd != NULL);
+
+    buf = general_malloc(max_buflen);
+    rte_assert0(buf != NULL);
+
+    ret = disk_device_read(dd, buf, max_buflen, pe->offset);
+    rte_assert0(ret == 0);
+
+    gpt_register_update_cb(gpt_update_notify);
+    ret = gpt_load(buffer);
+    rte_assert0(ret == 0);
+
+    gernal_free(buf);
+    return 0;
 }
 
 static void platform_reboot(int reason) {

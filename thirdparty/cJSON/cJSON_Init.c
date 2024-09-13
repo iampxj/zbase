@@ -19,6 +19,10 @@ static cJSON_Hooks allocator_hooks = {
 };
 
 CJSON_PUBLIC(int) cJSON_Init(void) {
-    cJSON_InitHooks(&allocator_hooks);
+    static unsigned char ready;
+    if (!ready) {
+        ready = 1;
+        cJSON_InitHooks(&allocator_hooks);
+    }
     return 0;
 }

@@ -19,10 +19,11 @@
 struct gp_table {
     char     version[12];
     uint32_t count;
-    struct gp_entry gps[];
+    struct gpt_entry gps[];
 };
 
 static struct gp_table *gp_table;
+static gpt_updated_cb gp_notify;
 
 static const char *
 get_string(cJSON *js, const char *s) {
@@ -42,7 +43,15 @@ get_value(cJSON *js, const char *s, int base, uint32_t *pval) {
     return -1;
 }
 
-const struct gp_entry*
+int gpt_register_update_cb(gpt_updated_cb cb) {
+    if (cb) {
+        gp_notify = cb;
+        return 0;
+    }
+    return -EINVAL;
+}
+
+const struct gpt_entry*
 gpt_find(const char *name) {
     rte_assert(gp_table != NULL);
     if (name == NULL)
@@ -86,20 +95,20 @@ void gpt_dump(void) {
     );
     pr_notice("| %-*.*s | %-*.*s |   offset   |    length  |\n", 
         pname_max, 
-        field_size(struct gp_entry, name), 
+        field_size(struct gpt_entry, name), 
         name, 
         dname_max,
-        field_size(struct gp_entry, parent),
+        field_size(struct gpt_entry, parent),
         devname
     );
 
     for (size_t i = 0; i < gpt->count; i++) {
         pr_notice("| %-*.*s | %-*.*s | 0x%08lx | 0x%08x |\n", 
             pname_max, 
-            field_size(struct gp_entry, name), 
+            field_size(struct gpt_entry, name), 
             gpt->gps[i].name, 
             dname_max,
-            field_size(struct gp_entry, parent),
+            field_size(struct gpt_entry, parent),
             gpt->gps[i].parent, 
             gpt->gps[i].offset, 
             gpt->gps[i].size
@@ -179,7 +188,7 @@ int gpt_load(const char *buffer) {
     }
 
     gp_new = general_calloc(1, sizeof(*gp_new) + 
-        count * sizeof(struct gp_entry));
+        count * sizeof(struct gpt_entry));
     if (gp_new == NULL) {
         pr_err("No more memory\n");
         err = -ENOMEM;
@@ -226,10 +235,10 @@ int gpt_load(const char *buffer) {
             }
 
             strlcpy(gp_new->gps[idx].name, label, 
-                field_size(struct gp_entry, name));
+                field_size(struct gpt_entry, name));
 
             strlcpy(gp_new->gps[idx].parent, storage, 
-                field_size(struct gp_entry, parent));
+                field_size(struct gpt_entry, parent));
 
             gp_new->count = idx + 1;
         }
@@ -238,14 +247,14 @@ int gpt_load(const char *buffer) {
          * Check partition validity
          */
         for (int i = (int)gp_new->count - 1; i >= icount; i--) {
-            const struct gp_entry *gp = &gp_new->gps[i];
+            const struct gpt_entry *gp = &gp_new->gps[i];
             if (gp->offset + gp->size > capacity) {
                 pr_err("Partition(%s) paramter is invalid\n", gp->name);
                 goto _free;
             }
 
             if (i > icount) {
-                const struct gp_entry *gp_next = &gp_new->gps[i - 1];
+                const struct gpt_entry *gp_next = &gp_new->gps[i - 1];
                 if (gp_next->offset + gp_next->size > gp->offset) {
                     pr_err("Partition(%s) paramter is invalid\n", gp_next->name);
                     goto _free; 
@@ -259,6 +268,9 @@ int gpt_load(const char *buffer) {
     gpt_destroy();
     gp_table = gp_new;
     cJSON_Delete(root);
+    if (gp_notify)
+        gp_notify();
+        
     return 0;
 
 _free:
@@ -284,5 +296,5 @@ int gpt_signature(
         return -EINVAL;
 
     return signature(gp_table, 
-        sizeof(*gpt) + gpt->count * sizeof(struct gp_entry), ctx);
+        sizeof(*gpt) + gpt->count * sizeof(struct gpt_entry), ctx);
 }

@@ -269,12 +269,11 @@ int disk_partition_register(const struct disk_partition *pt, size_t len) {
     struct disk_device *dd;
     size_t i;
 
-    if (partition_table)
-        return -EBUSY;
     if (!pt || !len) {
         pr_warn("invalid parameters!\n");
         return -EINVAL;
     }
+
     caches = (struct disk_device **)general_malloc(sizeof(caches) * len);
     if (!caches) {
         pr_warn("no more memory!\n");
@@ -286,9 +285,12 @@ int disk_partition_register(const struct disk_partition *pt, size_t len) {
             pr_err("Not found device(%s)\n", dp->parent);
             goto _free;
         }
-
         caches[i] = dd;
     }
+
+    if (parition_disk_cache)
+        general_free(parition_disk_cache);
+
     parition_disk_cache = caches;
     partition_table = pt;
     partition_table_len = len;

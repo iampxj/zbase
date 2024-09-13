@@ -27,17 +27,13 @@
 #include "basework/lib/string.h"
 #include "basework/utils/binmerge.h"
 #include "basework/lib/crc.h"
-#include "basework/param.h"
+#include "basework/dev/gpt.h"
 
 #ifndef _MB
 #define _MB(n) ((n) * 1024 * 1024ul)
 #endif
 
-#ifdef CONFIG_SPINAND_ACTS
-#define OTA_STORAGE_MEDIA "spinand"
-#else
 #define OTA_STORAGE_MEDIA "spi_flash"
-#endif
 
 struct file_partition {
     struct disk_device *dd;
@@ -111,24 +107,6 @@ void resource_ext_check(void) {
 	}
 }
 
-static int __rte_unused
-disk_write_filter(uint32_t offset, size_t len, int *retcode) {
-    uint32_t end = offset + len;
-
-    for (uint8_t i = 0; i < ota_partnum; i++) {
-        if (offset >= ota_part[i].begin && end <= ota_part[i].end)
-            return 0;
-    }
-    pr_dbg("%s: prevent to write/erase(0x%x, 0x%x)\n", __func__, offset, len);
-    *retcode = 0;
-    return -1;
-}
-
-int ota_write_filter(bool enable) {
-    (void) enable;
-    return -ENOSYS;
-}
-
 static uint32_t crc32_update(uint32_t crc, const uint8_t *data, 
     size_t len) {
 	/* crc table generated from polynomial 0xedb88320 */
@@ -187,6 +165,20 @@ static void *partition_get_fd(struct file_partition *dev, const char *name) {
     return dev;
 }
 
+static int
+gpt_get_entry(const char *name, struct file_partition *fpt) {
+    const struct gpt_entry *gpe;
+
+    gpe = gpt_find("picture");
+    rte_assert(gpe != NULL);
+    disk_device_open(gpe->parent, &fpt->dd);
+    rte_assert(fpt->dd != NULL);
+    fpt->offset = gpe->offset;
+    fpt->len = gpe->size;
+    fpt->name = name;
+    return 0;
+}
+
 static int extract_addr(const char *str, uint32_t *addr) {
     const char *beg = str;
     char *end;
@@ -205,12 +197,20 @@ static int generate_ota_nlog(const struct disk_partition *dp,
     const struct disk_partition *fw) {
     struct fwpkg_record rec;
     const struct partition_entry *pe;
+    const struct gpt_entry *gpe;
     int err = 0, idx = 0;
 
     memset(&rec, 0, sizeof(rec));
     rec.magic = FILE_HMAGIC;
     rec.dl_offset = fw->offset;
     rec.dl_size = fw->len;
+
+    pe = parition_get_entry2(STORAGE_ID_NOR, /* TODO: */);
+    rte_assert(pe != NULL);
+    strlcpy(rec.nodes[idx].f_name, "gpt.bin", MAX_NAMELEN);
+    rec.nodes[idx].f_offset = pe->offset;
+    rec.nodes[idx].f_size   = pe->size;
+    idx++;
 
     pe = parition_get_entry2(STORAGE_ID_NOR, 4);
     rte_assert(pe != NULL);
@@ -219,20 +219,21 @@ static int generate_ota_nlog(const struct disk_partition *dp,
     rec.nodes[idx].f_size   = pe->size;
     idx++;
 
-    pe = parition_get_entry2(STORAGE_ID_NOR, partition_get_fid("res+.bin"));
-    rte_assert(pe != NULL);
+    gpe = gpt_find("res+.bin");
+    rte_assert(gpe != NULL);
     strlcpy(rec.nodes[idx].f_name, "res+.bin", MAX_NAMELEN);
-    rec.nodes[idx].f_offset = pe->offset;
-    rec.nodes[idx].f_size   = pe->size;
+    rec.nodes[idx].f_offset = gpe->offset;
+    rec.nodes[idx].f_size   = gpe->size;
     idx++;
     
-    pe = parition_get_entry2(STORAGE_ID_NOR, partition_get_fid("fonts+.bin"));
-    rte_assert(pe != NULL);
+    gpe = gpt_find("fonts+.bin");
+    rte_assert(gpe != NULL);
     strlcpy(rec.nodes[idx].f_name, "fonts+.bin", MAX_NAMELEN);
-    rec.nodes[idx].f_offset = pe->offset;
-    rec.nodes[idx].f_size   = pe->size;
+    rec.nodes[idx].f_offset = gpe->offset;
+    rec.nodes[idx].f_size   = gpe->size;
     idx++;
 
+    rte_assert0(idx <= MAX_FWPACK_FILES);
     rec.count = idx;
     rec.hcrc = crc32_calc((uint8_t *)&rec, sizeof(rec) - sizeof(uint32_t));
 #ifndef CONFIG_SPINAND_ACTS
@@ -294,19 +295,14 @@ static int generate_ota_log(const struct disk_partition *dp,
 static struct file_partition *
 __partition_open(const char *name, size_t fsize) {
     const struct partition_entry *parti;
+    const struct gpt_entry *gpe;
 
-    if (!file_dev.dd) {
-        disk_device_open(OTA_STORAGE_MEDIA, &file_dev.dd);
-        rte_assert(file_dev.dd != NULL);
-    }
+    disk_device_open(OTA_STORAGE_MEDIA, &file_dev.dd);
+    rte_assert(file_dev.dd != NULL);
+
     /* Picture resource partition */
     if (!strcmp(name, "res.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 
-            PARTITION_FILE_ID_SDFS_PART0);
-        rte_assert(parti != NULL);
-        file_dev.offset = parti->offset;
-        file_dev.len = parti->size;
-        file_dev.name = "picture";
+        gpt_get_entry("picture", &file_dev);
         pr_dbg("open picture partition: start(0x%x) size(%d)\n", 
             file_dev.offset, file_dev.len);
         return &file_dev;
@@ -314,12 +310,7 @@ __partition_open(const char *name, size_t fsize) {
 	
     /* Picture resource ext-partition */
     if (!strcmp(name, "res_ext.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 
-            PARTITION_FILE_ID_SDFS_PART1);
-        rte_assert(parti != NULL);
-		file_dev.offset = parti->offset;
-		file_dev.len = parti->size;
-        file_dev.name = "picture-ext";
+        gpt_get_entry("picture_ext", &file_dev);
         pr_dbg("open picture extension partition: start(0x%x) size(%d)\n", 
             file_dev.offset, file_dev.len);
         return &file_dev;
@@ -327,17 +318,46 @@ __partition_open(const char *name, size_t fsize) {
 
     /* Font resource partition */
     if (!strcmp(name, "fonts.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 
-            PARTITION_FILE_ID_SDFS_PART2);
-        rte_assert(parti != NULL);
-        file_dev.offset = parti->offset;
-        file_dev.len = parti->size;
-        file_dev.name = "font";
+        gpt_get_entry("font", &file_dev);
         pr_dbg("open fonts partition: start(0x%x) size(%d)\n", 
             file_dev.offset, file_dev.len);
         return &file_dev;
     }
 
+    /* Default Dial */
+    if (!strcmp(name, "dial.bin")) {
+        gpt_get_entry("watchface", &file_dev);
+        pr_dbg("open udisk partition: start(0x%x) size(%d)\n", 
+            file_dev.offset, file_dev.len);
+        return &file_dev;
+    }
+
+    if (!strcmp(name, "res+.bin")) {
+        gpt_get_entry("picture+", &file_dev);
+        pr_dbg("open picture increase: start(0x%x) size(%d)\n", 
+            file_dev.offset, file_dev.len);
+        return &file_dev;
+    }
+
+    if (!strcmp(name, "fonts+.bin")) {
+        gpt_get_entry("font+", &file_dev);
+        pr_dbg("open font increase: start(0x%x) size(%d)\n", 
+            file_dev.offset, file_dev.len);
+        return &file_dev;
+    }
+
+    if (!fnmatch("0x*.bin", name, FNM_CASEFOLD)) {
+        uint32_t start;
+        if (!extract_addr(name, &start)) {
+            file_dev.offset = start;
+            file_dev.len = _MB(32);
+            file_dev.name = name;
+            pr_dbg("open %s partition: start(0x%x) size(%d)\n", 
+                name, file_dev.offset, file_dev.len);
+            return &file_dev;
+        }
+    }
+    
     /* System configuration */
     if (!strcmp(name, "sdfs.bin")) {
         parti = parition_get_entry2(STORAGE_ID_NOR, 
@@ -352,8 +372,7 @@ __partition_open(const char *name, size_t fsize) {
     }
 
     if (!strcmp(name, "sdfs_k.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 
-            20);
+        parti = parition_get_entry2(STORAGE_ID_NOR, 20);
         rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
@@ -363,21 +382,18 @@ __partition_open(const char *name, size_t fsize) {
         return &file_dev;
     }
 
-    /* Default Dial */
-    if (!strcmp(name, "dial.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 
-            PARTITION_FILE_ID_UDISK);
+    if (!strcmp(name, "mbrec.bin")) {
+        parti = parition_get_entry2(STORAGE_ID_NOR, 1);
         rte_assert(parti != NULL);
         file_dev.offset = parti->offset;
         file_dev.len = parti->size;
-        file_dev.name = "dial";
-        pr_dbg("open udisk partition: start(0x%x) size(%d)\n", 
-            file_dev.offset, file_dev.len);
+        file_dev.name = "mbrec";
+        pr_dbg("open mbrec partition: start(0x%x) size(%d)\n", 
+            parti->offset, parti->size);
         return &file_dev;
     }
-    
+
     /* Firmware partition */
-#ifndef CONFIG_BOARD_ATS3085L_HG_BEANS_EXT_NOR
     if (!strcmp(name, "zephyr.bin") ||
         !strcmp(name, "fwpack.bin")) {
         const struct disk_partition *dp, *fdp;
@@ -404,40 +420,6 @@ __partition_open(const char *name, size_t fsize) {
             }
         }
 
-        return &file_dev;
-    }
-#else
-    if (!strcmp(name, "zephyr.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 50);
-        rte_assert(parti != NULL);
-        file_dev.offset = parti->offset + 0x1000;
-        file_dev.len = parti->size - 0x1000;
-        file_dev.name = "firmware";
-        pr_dbg("open fonts partition: start(0x%x) size(%d)\n", 
-            file_dev.offset, file_dev.len);
-        return &file_dev;
-    }
-#endif /* CONFIG_BOARD_ATS3085L_HG_BEANS_EXT_NOR */
-
-    if (!strcmp(name, "wtm_app.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 51);
-        rte_assert(parti != NULL);
-        file_dev.offset = parti->offset;
-        file_dev.len = parti->size;
-        file_dev.name = "wtm_app";
-        pr_dbg("open wtm-app partition: start(0x%x) size(%d)\n", 
-            parti->offset, parti->size);
-        return &file_dev;
-    }
-
-    if (!strcmp(name, "wtm_boot.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 50);
-        rte_assert(parti != NULL);
-        file_dev.offset = parti->offset;
-        file_dev.len = parti->size;
-        file_dev.name = "wtm_boot";
-        pr_dbg("open wtm_boot partition: start(0x%x) size(%d)\n", 
-            parti->offset, parti->size);
         return &file_dev;
     }
 		
@@ -497,17 +479,6 @@ __partition_open(const char *name, size_t fsize) {
         return &file_dev;
     }
 	
-    if (!strcmp(name, "mbrec.bin")) {
-        parti = parition_get_entry2(STORAGE_ID_NOR, 1);
-        rte_assert(parti != NULL);
-        file_dev.offset = parti->offset;
-        file_dev.len = parti->size;
-        file_dev.name = "mbrec";
-        pr_dbg("open mbrec partition: start(0x%x) size(%d)\n", 
-            parti->offset, parti->size);
-        return &file_dev;
-    }
-
     if (!strcmp(name, "dial_default.bin")) {
         const struct disk_partition *dp;
         dp = disk_partition_find("dial_local");
@@ -518,22 +489,6 @@ __partition_open(const char *name, size_t fsize) {
         pr_dbg("open dial_local partition: start(0x%x) size(%d)\n", 
             dp->offset, dp->len);
         return &file_dev;
-    }
-
-    if (!strcmp(name, "res+.bin") ||
-        !strcmp(name, "fonts+.bin"))
-        return partition_get_fd(&file_dev, name);
-
-    if (!fnmatch("0x*.bin", name, FNM_CASEFOLD)) {
-        uint32_t start;
-        if (!extract_addr(name, &start)) {
-            file_dev.offset = start;
-            file_dev.len = _MB(32);
-            file_dev.name = name;
-            pr_dbg("open %s partition: start(0x%x) size(%d)\n", 
-                name, file_dev.offset, file_dev.len);
-            return &file_dev;
-        }
     }
 
     return NULL;
@@ -618,90 +573,27 @@ static int partition_write(void *fp, const void *buf,
 #endif /* CONFIG_SPINAND_ACTS */
 }
 
-static int partition_data_copy(struct disk_device *dd, uint32_t dst, 
-    uint32_t src, size_t size, size_t blksz) {
-	size_t len = size;
-	uint32_t offset = 0;
-    char buffer[1024];
-    int ret;
-
-    pr_dbg("Copy partiton data ...\n");
-
-    /* Flush disk cache */
-    blkdev_sync();
-
-    /* 
-     * Erase destination address. The parititon size 
-     * must be a multiple of the block size 
-     */
-    pr_dbg("erasing address(0x%x) size(0x%x)...\n", dst, rte_roundup(len, blksz));
-    disk_device_erase(dd, dst, rte_roundup(len, blksz));
-
-    /* Copy data */
-    while (len > 0) {
-        size_t bytes = rte_min(len, sizeof(buffer));
-
-#ifndef CONFIG_SPINAND_ACTS
-        ret = disk_device_read(dd, buffer, bytes, src + offset);
-        if (ret < 0) {
-            pr_err("read 0x%x failed\n", src + offset);
-            return ret;
-        }
-        ret = disk_device_write(dd, buffer, bytes, dst + offset);
-        if (ret) {
-            pr_err("write 0x%x failed\n", dst + offset);
-            return ret;
-        }
-
-#else /* !CONFIG_SPINAND_ACTS */
-        ret = blkdev_read(dd, buffer, bytes, src + offset);
-        if (ret < 0) {
-            pr_err("read 0x%x failed\n", src + offset);
-            return ret;
-        }
-        ret = blkdev_write(dd, buffer, bytes, dst + offset);
-        if (ret) {
-            pr_err("write 0x%x failed\n", dst + offset);
-            return ret;
-        }
-#endif /* CONFIG_SPINAND_ACTS */
-        offset += bytes;
-        len   -= bytes;
-    }
-
-#ifdef CONFIG_SPINAND_ACTS
-    blkdev_sync();
-#endif
-    pr_info("Copy %d bytes finished (from 0x%x to 0x%x )\n", size, src, dst);
-    return 0;
-}
-
 static void partition_completed(int err, void *fp, const char *fname, 
     size_t size) {
-    int fid;
-
-    if (err || ota_record_new)
+    if (err)
         return;
 
-    fid = partition_get_fid(fname);
-    if (fid > 0) {
-        const struct partition_entry *pe;
-        const struct file_partition *filp;
+    /*
+     * Reload GPT information
+     */
+    if (!strcmp(fname, "gpt.bin")) {
+        struct file_partition *filp = fp;
+        size_t max_buflen = 4096;
+        struct bin_header *bin;
 
-        filp = (struct file_partition *)fp;
-        pe = parition_get_entry2(STORAGE_ID_NOR, fid);
-        if (pe != NULL) {
-            pr_dbg("increase partiton(%s): offset(0x%08x) size(0x%x)\n", 
-				pe->name, pe->offset, pe->size);
-            size_t blksz = disk_device_get_block_size(filp->dd);
-            if (pe->offset != UINT32_MAX && 
-                pe->size >= rte_roundup(size, blksz)) {
-                partition_data_copy(filp->dd, pe->offset, 
-                    filp->offset, size, blksz);
-                return;
-            }
-        }
-        rte_assert(0);
+        bin = general_malloc(max_buflen);
+        rte_assert0(bin != NULL);
+        rte_assert0(disk_device_read(filp->dd, bin, 4096, filp->offset) == 0);
+        rte_assert0(bin->magic == FILE_HMAGIC);
+        rte_assert0(bin->size < max_buflen);
+        rte_assert0(lib_crc32(bin->data, bin->size) == bin->crc);
+        rte_assert0(gpt_load(bin->data) == 0);
+        general_free(bin);
     }
 }
 

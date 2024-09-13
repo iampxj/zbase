@@ -168,6 +168,9 @@ void __disk_partition_dump(const char *title, const struct disk_partition *dp,
 int partitions_configure_build(long base_addr, size_t size, 
     const char *phydev, bool sequence);
 
+int partitions_configure_rebuild(long base_addr, size_t size, 
+    const char *phydev, bool sequence);
+    
 /*
  * logic_partitions_create - Create a logic parition from the parent partition
  *

@@ -41,10 +41,25 @@ PARTITION_TABLE_DEFINE(partitions_usr2_configure) {
     PARTITION_TERMINAL
 };
 
-int usr_partition_init(void) {
+int usr_partition_init(bool reinit) {
     int err;
-	
-    usr_sfile_init();
+
+    if (reinit) {
+        struct disk_partition *dp;
+        dp = partitions_usr_configure;
+        while (dp->name) {
+            dp->offset = -1;
+            dp++;
+        }
+        dp = partitions_usr2_configure;
+        while (dp->name) {
+            dp->offset = -1;
+            dp++;
+        }
+    } else {
+        usr_sfile_init();
+    }
+
     err = logic_partitions_create("usrdata", partitions_usr_configure);
     if (!err)
         err = logic_partitions_create("usrdata2", partitions_usr2_configure);
