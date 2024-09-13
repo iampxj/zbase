@@ -4,30 +4,58 @@
 #ifndef BASEWORK_MODULE_H_
 #define BASEWORK_MODULE_H_
 
+#include <stdint.h>
+#include "basework/container/queue.h"
 
 #ifdef __cplusplus
 extern "C"{
 #endif
 
+struct module_runtime;
+
 /*
  * Compiler IDs
  */
-#define COMPILER_GNU    0x01
-#define COMPILER_CLANG  0x02
+#if defined(__clang__)
+# define MODULE_COMPILER_ID 0x10
+#elif defined(__GNUC__)
+# define MODULE_COMPILER_ID 0x11
+#else
+# error "Unknown compiler"
+#endif 
 
-struct bin_module {
-    const char    name[16]; /* moudule name */    
-    unsigned long magic;
-    unsigned long cid; /* compiler ID */
-    unsigned long text_start; /* .text section */
-    unsigned long text_size;
-    unsigned long data_start; /* .data section */
-    unsigned long data_size;
-    unsigned long bss_start;  /* .bss section  */
-    unsigned long bss_size;
+struct module_runtime;
+struct module_class;
 
-    int (*load)(void *ctx);
-    int (*unload)(void *ctx);
+struct module {
+#define MODULE_MAGIC 0xFDFDFDFD 
+    uintptr_t  magic;
+    uintptr_t  cid; /* compiler ID */
+    uintptr_t  mod_size;
+    uintptr_t  text_start; /* .text section */
+    uintptr_t  text_size;
+    uintptr_t  data_start; /* .data section */
+    uintptr_t  data_size;
+    uintptr_t  ldata_start;
+    uintptr_t  bss_start;  /* .bss section  */
+    uintptr_t  bss_size;
+
+    int (*load)(struct module_class *api);
+    int (*unload)(struct module_class *api);
+};
+
+
+struct module_runtime {
+    SLIST_ENTRY(module_runtime) link;
+    struct module *mod;
+    struct module_class *m_op;
+    unsigned int id;
+    int refcnt;
+    int state;
+#define MODULE_STATE_IDLE       0
+#define MODULE_STATE_UNLOADING  1
+#define MODULE_STATE_LOADING    2
+#define MODULE_STATE_LOADED     3
 };
 
 #ifdef __cplusplus
