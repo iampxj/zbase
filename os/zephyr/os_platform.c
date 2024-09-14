@@ -4,7 +4,6 @@
  * OS adapt layer for zephyr
  */
 
-#include "basework/dev/gpt.h"
 #ifdef CONFIG_HEADER_FILE
 #include CONFIG_HEADER_FILE
 #endif
@@ -34,6 +33,15 @@
 #include "basework/dev/partition.h"
 #include "basework/system.h"
 #include "board_cfg.h"
+
+
+/*
+ * Partition layout
+ *
+ * ---------------------------------------------------------------------------------------------------
+ *| FIRMWARE(4) | SDFS(5) | NVRAM_RO(6) | NVRAM_RW(7) | SDFS_K(20) | GPT(30) | BOOTPARAM(31) | GP(36) |
+ * ---------------------------------------------------------------------------------------------------
+ */
 
 // #define GMEM_DEBUG
 
@@ -450,16 +458,14 @@ static void gpt_update_notify(void) {
         err = partitions_configure_build(gpe->offset, 
             gpe->size, gpe->parent, false);
         rte_assert0(err == 0);
-        err = usr_partition_init(false);
-        rte_assert0(err == 0);
+        rte_assert0(usr_partition_init(false) == 0);
         first = false;
     } else {
         k_sched_lock();
         err = partitions_configure_rebuild(gpe->offset, 
             gpe->size, gpe->parent, false);
         rte_assert0(err == 0);
-        err = usr_partition_init(true);
-        rte_assert0(err == 0);
+        rte_assert0(usr_partition_init(true) == 0);
         k_sched_unlock();
     }
 }
@@ -468,11 +474,10 @@ static int __rte_unused __rte_notrace platform_partition_init(void) {
     const struct partition_entry *pe;
     struct disk_device *dd = NULL;
     size_t max_buflen = 4096;
+    struct bin_header *bin;
     char *buf;
-    int ret;
 
-    //TODO: find gpt parititon 
-    pe = parition_get_entry2(STORAGE_ID_NOR, /* TODO: */);
+    pe = parition_get_entry2(STORAGE_ID_NOR, 30);
     rte_assert0(pe != NULL);
 
     if (pe->storage_id == STORAGE_ID_NOR)
@@ -483,37 +488,31 @@ static int __rte_unused __rte_notrace platform_partition_init(void) {
         disk_device_open("spi_flash_2", &dd);
     rte_assert0(dd != NULL);
 
-    buf = general_malloc(max_buflen);
-    rte_assert0(buf != NULL);
-
-    ret = disk_device_read(dd, buf, max_buflen, pe->offset);
-    rte_assert0(ret == 0);
-
+    bin = general_malloc(max_buflen);
+    rte_assert0(bin != NULL);
+    rte_assert0(disk_device_read(dd, bin, max_buflen, pe->offset) == 0);
+    rte_assert0(bin->magic == FILE_HMAGIC);
+    rte_assert0(bin->size < max_buflen);
+    rte_assert0(lib_crc32(bin->data, bin->size) == bin->crc);
     gpt_register_update_cb(gpt_update_notify);
-    ret = gpt_load(buffer);
-    rte_assert0(ret == 0);
+    rte_assert0(gpt_load(bin->data) == 0);
+    gpt_dump();
+    general_free(bin);
 
-    gernal_free(buf);
     return 0;
 }
 
 static void platform_reboot(int reason) {
-    system_power_reboot(reason); //sys_pm_reboot(reason);
+    system_power_reboot(reason);
 }
 
 static void platform_shutdown(void) {
-    system_power_off(); //sys_pm_poweroff();
+    system_power_off();
 }
 
 static uint32_t __rte_notrace platform_gettime_since_boot(void) {
     return k_uptime_get_32();
 }
-
-// static void reg32_update(uint32_t addr, uint32_t mask, uint32_t val) {
-//     uint32_t cur = sys_read32(addr);
-//     cur &= ~mask;
-//     sys_write32(cur | val, addr);
-// }
 
 /*
  * Make system enter transport mode

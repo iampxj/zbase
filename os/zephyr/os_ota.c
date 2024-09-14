@@ -205,13 +205,19 @@ static int generate_ota_nlog(const struct disk_partition *dp,
     rec.dl_offset = fw->offset;
     rec.dl_size = fw->len;
 
-    pe = parition_get_entry2(STORAGE_ID_NOR, /* TODO: */);
+    /*
+     * Global parition table
+     */
+    pe = parition_get_entry2(STORAGE_ID_NOR, 30);
     rte_assert(pe != NULL);
     strlcpy(rec.nodes[idx].f_name, "gpt.bin", MAX_NAMELEN);
     rec.nodes[idx].f_offset = pe->offset;
     rec.nodes[idx].f_size   = pe->size;
     idx++;
 
+    /*
+     * Firmware
+     */
     pe = parition_get_entry2(STORAGE_ID_NOR, 4);
     rte_assert(pe != NULL);
     strlcpy(rec.nodes[idx].f_name, "zephyr.bin", MAX_NAMELEN);
@@ -219,6 +225,9 @@ static int generate_ota_nlog(const struct disk_partition *dp,
     rec.nodes[idx].f_size   = pe->size;
     idx++;
 
+    /*
+     * Increase resource for picture
+     */
     gpe = gpt_find("res+.bin");
     rte_assert(gpe != NULL);
     strlcpy(rec.nodes[idx].f_name, "res+.bin", MAX_NAMELEN);
@@ -226,6 +235,9 @@ static int generate_ota_nlog(const struct disk_partition *dp,
     rec.nodes[idx].f_size   = gpe->size;
     idx++;
     
+    /*
+     * Increase resource for font
+     */
     gpe = gpt_find("fonts+.bin");
     rte_assert(gpe != NULL);
     strlcpy(rec.nodes[idx].f_name, "fonts+.bin", MAX_NAMELEN);
@@ -593,6 +605,7 @@ static void partition_completed(int err, void *fp, const char *fname,
         rte_assert0(bin->size < max_buflen);
         rte_assert0(lib_crc32(bin->data, bin->size) == bin->crc);
         rte_assert0(gpt_load(bin->data) == 0);
+        gpt_dump();
         general_free(bin);
     }
 }
