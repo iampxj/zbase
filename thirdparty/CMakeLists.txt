@@ -1,4 +1,4 @@
 add_subdirectory_ifdef(CONFIG_GTEST googletest)
-add_subdirectory_ifdef(CONFIG_JSON_PARSER cJSON)
+add_subdirectory_ifdef(CONFIG_CJSON cJSON)
 add_subdirectory_ifdef(CONFIG_LUA lua)
 add_subdirectory_ifdef(CONFIG_LZ4 lz4)

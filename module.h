@@ -4,6 +4,7 @@
 #ifndef BASEWORK_MODULE_H_
 #define BASEWORK_MODULE_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -50,6 +51,46 @@ struct module {
 #define MODULE_STATE_UNLOADING  1
 #define MODULE_STATE_LOADING    2
 #define MODULE_STATE_LOADED     3
+
+/*
+ * Define a loadable module
+ */
+#ifdef MODULE_LOADABLE
+extern char _stext[];
+extern char _etext[];
+extern char _sdata[];
+extern char _edata[];
+extern char _sbss[];
+extern char _ebss[];
+
+#define module_install(_name, _load_fn, _unload_fn) \
+    struct module _name##__module __attribute__((section(".vectors"))) = { \
+        .magic         = MODULE_MAGIC, \
+        .cid           = MODULE_COMPILER_ID, \
+        .mod_size      = (uintptr_t)_module_end, \
+        .text_start    = (uintptr_t)_stext, \
+        .text_size     = (uintptr_t)(_etext - _stext), \
+        .data_start    = (uintptr_t)_sdata, \
+        .data_size     = (uintptr_t)(_edata - _sdata), \
+        .ldata_start   = 0, \
+        .bss_start     = (uintptr_t)_sbss, \
+        .bss_size      = (uintptr_t)(_ebss - _sbss), \
+        .load          = _load_fn, \
+        .unload        = _unload_fn \
+    }
+#endif /* MODULE_LOADABLE */
+
+/*
+ * Public interface
+ */
+int module_load_fromfile(const char *file, struct module_class *api, 
+    struct module_runtime **prt);
+int module_load_frommem(void *code, size_t size, struct module_class *api, 
+    struct module_runtime **prt);
+int moudule_unload(struct module_runtime *rt);
+int module_get(struct module_runtime *rt);
+int module_put(struct module_runtime *rt);
+int module_init(void);
 
 #ifdef __cplusplus
 }

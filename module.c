@@ -2,6 +2,7 @@
  * Copyright 2024 wtcat
  */
 
+#define pr_fmt(fmt) "<mod>: "fmt
 #include <errno.h>
 #include <string.h>
 
@@ -12,8 +13,6 @@
 #include "basework/os/osapi_fs.h"
 #include "basework/malloc.h"
 #include "basework/log.h"
-
-#define pr_fmt(fmt) "<mod>: "fmt
 
 struct module_runtime {
     SLIST_ENTRY(module_runtime) link;
@@ -220,7 +219,7 @@ _out:
     return ret;
 }
 
-int moudule_unlock(struct module_runtime *rt) {
+int moudule_unload(struct module_runtime *rt) {
     int err;
 
     if (rt == NULL)
@@ -260,7 +259,6 @@ _unlock:
 }
 
 int module_init(void) {
-
-    
+    MODULE_LOCK_INIT();
     return 0;
 }

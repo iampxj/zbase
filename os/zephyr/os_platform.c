@@ -27,11 +27,16 @@
 #include "sys_manager.h"
 #endif
 
+#include "basework/assert.h"
 #include "basework/malloc.h"
 #include "basework/log.h"
 #include "basework/dev/disk.h"
 #include "basework/dev/partition.h"
+#include "basework/dev/gpt.h"
 #include "basework/system.h"
+#include "basework/utils/binmerge.h"
+#include "basework/lib/crc.h"
+
 #include "board_cfg.h"
 
 
@@ -447,6 +452,7 @@ static void gpt_update_notify(void) {
     extern int usr_partition_init(bool reinit);
     const struct gpt_entry *gpe;
     static bool first = true;
+    int err;
 
     gpe = gpt_find("reserved");
     rte_assert0(gpe != NULL);
@@ -475,7 +481,6 @@ static int __rte_unused __rte_notrace platform_partition_init(void) {
     struct disk_device *dd = NULL;
     size_t max_buflen = 4096;
     struct bin_header *bin;
-    char *buf;
 
     pe = parition_get_entry2(STORAGE_ID_NOR, 30);
     rte_assert0(pe != NULL);

@@ -16,12 +16,13 @@
 #include <partition/partition.h>
 #include <sdfs.h>
 
-#include "basework/assert.h"
 #include "basework/lib/fnmatch.h"
 #include "basework/dev/blkdev.h"
 #include "basework/dev/disk.h"
 #include "basework/dev/partition.h"
 #include "basework/utils/ota_fstream.h"
+#include "basework/malloc.h"
+#include "basework/assert.h"
 #include "basework/log.h"
 #include "basework/boot/boot.h"
 #include "basework/lib/string.h"
