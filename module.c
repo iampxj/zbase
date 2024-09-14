@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include "basework/container/queue.h"
 #include "basework/rte_cpu.h"
 #include "basework/module.h"
 #include "basework/os/osapi.h"
@@ -14,6 +15,14 @@
 
 #define pr_fmt(fmt) "<mod>: "fmt
 
+struct module_runtime {
+    SLIST_ENTRY(module_runtime) link;
+    struct module *mod;
+    struct module_class *m_op;
+    int refcnt;
+    int state;
+};
+
 #define MODULE_LOCK_INIT() os_mtx_init(&module_mtx, 0)
 #define MODULE_LOCK()      os_mtx_lock(&module_mtx)
 #define MODULE_UNLOCK()    os_mtx_unlock(&module_mtx)
@@ -21,7 +30,6 @@
 static os_mutex_t module_mtx;
 static SLIST_HEAD(, module_runtime) module_list = 
     SLIST_HEAD_INITIALIZER(module_list);
-static unsigned int module_id;
 
 static void module_setup(struct module *m) {
     uintptr_t base = (uintptr_t)m;
@@ -76,7 +84,6 @@ static int __module_load(struct module_runtime *rt, struct module *m,
     rt->m_op = api;
     rt->mod = m;
     rt->refcnt = 0;
-    rt->id = module_id++;
     SLIST_INSERT_HEAD(&module_list, rt, link);
 
 _unlock:
@@ -86,28 +93,27 @@ _unlock:
 
 static int __module_unload(struct module_runtime *rt) {
     struct module *m = rt->mod;
-    int err = 0;
+    int state, err = 0;
 
-    MODULE_LOCK();
     if (rt->refcnt > 0) {
         err = -EBUSY;
         goto _unlock;
     }
     
+    state = rt->state;
     rt->state = MODULE_STATE_UNLOADING;
     if (m->unload) {
         err = m->unload(rt->m_op);
         if (err) {
-            rt->state = MODULE_STATE_IDLE;
+            rt->state = state;
             goto _unlock;
         }
     }
     rt->state = MODULE_STATE_IDLE;
     SLIST_REMOVE(&module_list, rt, module_runtime, link);
-    general_free(rt);
+    general_free(rt->mod);
 
 _unlock:
-    MODULE_UNLOCK();
     return err;
 }
 
@@ -214,6 +220,18 @@ _out:
     return ret;
 }
 
+int moudule_unlock(struct module_runtime *rt) {
+    int err;
+
+    if (rt == NULL)
+        return -EINVAL;
+
+    MODULE_LOCK();
+    err = __module_unload(rt);
+    MODULE_UNLOCK();
+    return err;
+}
+
 int module_get(struct module_runtime *rt) {
     MODULE_LOCK();
     rt->refcnt++;
@@ -222,9 +240,27 @@ int module_get(struct module_runtime *rt) {
 }
 
 int module_put(struct module_runtime *rt) {
+    int err = 0;
+
+    if (rt == NULL)
+        return -EINVAL;
+
     MODULE_LOCK();
-    if (rt->refcnt > 0)
+    if (rt->refcnt > 0) {
         rt->refcnt--;
+        if (rt->refcnt == 0) {
+            err = __module_unload(rt);
+            goto _unlock;
+        }
+    }
+
+_unlock:
     MODULE_UNLOCK();
+    return err;
+}
+
+int module_init(void) {
+
+    
     return 0;
 }

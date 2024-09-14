@@ -5,7 +5,6 @@
 #define BASEWORK_MODULE_H_
 
 #include <stdint.h>
-#include "basework/container/queue.h"
 
 #ifdef __cplusplus
 extern "C"{
@@ -44,19 +43,13 @@ struct module {
     int (*unload)(struct module_class *api);
 };
 
-
-struct module_runtime {
-    SLIST_ENTRY(module_runtime) link;
-    struct module *mod;
-    struct module_class *m_op;
-    unsigned int id;
-    int refcnt;
-    int state;
+/*
+ * Moudle state
+ */
 #define MODULE_STATE_IDLE       0
 #define MODULE_STATE_UNLOADING  1
 #define MODULE_STATE_LOADING    2
 #define MODULE_STATE_LOADED     3
-};
 
 #ifdef __cplusplus
 }
