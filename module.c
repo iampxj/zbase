@@ -2,6 +2,7 @@
  * Copyright 2024 wtcat
  */
 
+#include <cerrno>
 #define pr_fmt(fmt) "<mod>: "fmt
 #include <errno.h>
 #include <string.h>
@@ -18,6 +19,7 @@ struct module_runtime {
     SLIST_ENTRY(module_runtime) link;
     struct module *mod;
     struct module_class *m_op;
+    uint32_t id;
     int refcnt;
     int state;
 };
@@ -27,6 +29,7 @@ struct module_runtime {
 #define MODULE_UNLOCK()    os_mtx_unlock(&module_mtx)
 
 static os_mutex_t module_mtx;
+static uint32_t module_id;
 static SLIST_HEAD(, module_runtime) module_list = 
     SLIST_HEAD_INITIALIZER(module_list);
 
@@ -41,6 +44,16 @@ static void module_setup(struct module *m) {
     memcpy((void *)m->data_start, (void *)m->ldata_start, 
         m->data_size);
     memset((void *)m->bss_start, 0, m->bss_size);
+}
+
+static struct module_runtime *
+module_find(uint32_t id) {
+    struct module_runtime *rt;
+    SLIST_FOREACH(rt, &module_list, link) {
+        if (id == rt->id)
+            return rt;
+    }
+    return NULL;
 }
 
 static int module_check(const struct module *m) {
@@ -83,6 +96,7 @@ static int __module_load(struct module_runtime *rt, struct module *m,
     rt->m_op = api;
     rt->mod = m;
     rt->refcnt = 0;
+    rt->id = module_id++;
     SLIST_INSERT_HEAD(&module_list, rt, link);
 
 _unlock:
@@ -116,8 +130,8 @@ _unlock:
     return err;
 }
 
-int module_load_fromfile(const char *file, struct module_class *api, 
-    struct module_runtime **prt) {
+int module_load_fromfile(const char *file, struct module_class *api,
+    uint32_t *id) {
     struct module_runtime *rt;
     struct module m, *p;
     struct vfs_stat stat;
@@ -165,7 +179,7 @@ int module_load_fromfile(const char *file, struct module_class *api,
     if (ret < 0)
         goto _free;
 
-    *prt = rt;
+    *id = rt->id;
     vfs_close(fd);
     return 0;
 
@@ -177,7 +191,7 @@ _close:
 }
 
 int module_load_frommem(void *code, size_t size, struct module_class *api, 
-    struct module_runtime **prt) {
+    uint32_t *id) {
     struct module *p = (struct module *)code;
     struct module_runtime *rt;
     size_t msize;
@@ -210,7 +224,7 @@ int module_load_frommem(void *code, size_t size, struct module_class *api,
     if (ret < 0)
         goto _free;
 
-    *prt = rt;
+    *id = rt->id;
     return 0;
 
 _free:
@@ -219,38 +233,52 @@ _out:
     return ret;
 }
 
-int moudule_unload(struct module_runtime *rt) {
+int moudule_unload(uint32_t id) {
+    struct module_runtime *rt;
     int err;
 
-    if (rt == NULL)
-        return -EINVAL;
-
     MODULE_LOCK();
+    rt = module_find(id);
+    if (rt == NULL) {
+        err = -ENODATA;
+        goto _unlock;
+    }
     err = __module_unload(rt);
+_unlock:
     MODULE_UNLOCK();
     return err;
 }
 
-int module_get(struct module_runtime *rt) {
+int module_get(uint32_t id) {
+    struct module_runtime *rt;
+    int err;
+
     MODULE_LOCK();
-    rt->refcnt++;
+    rt = module_find(id);
+    if (rt) 
+        rt->refcnt++;
+    else
+        err = -ENODATA;
     MODULE_UNLOCK();
-    return 0;
+    return err;
 }
 
-int module_put(struct module_runtime *rt) {
+int module_put(uint32_t id) {
+    struct module_runtime *rt;
     int err = 0;
 
-    if (rt == NULL)
-        return -EINVAL;
-
     MODULE_LOCK();
-    if (rt->refcnt > 0) {
-        rt->refcnt--;
-        if (rt->refcnt == 0) {
-            err = __module_unload(rt);
-            goto _unlock;
+    rt = module_find(id);
+    if (rt) {
+        if (rt->refcnt > 0) {
+            rt->refcnt--;
+            if (rt->refcnt == 0) {
+                err = __module_unload(rt);
+                goto _unlock;
+            }
         }
+    } else {
+        err = -ENODATA;
     }
 
 _unlock:

@@ -84,12 +84,12 @@ extern char _ebss[];
  * Public interface
  */
 int module_load_fromfile(const char *file, struct module_class *api, 
-    struct module_runtime **prt);
+    uint32_t *id);
 int module_load_frommem(void *code, size_t size, struct module_class *api, 
-    struct module_runtime **prt);
-int moudule_unload(struct module_runtime *rt);
-int module_get(struct module_runtime *rt);
-int module_put(struct module_runtime *rt);
+    uint32_t *id);
+int moudule_unload(uint32_t id);
+int module_get(uint32_t id);
+int module_put(uint32_t id);
 int module_init(void);
 
 #ifdef __cplusplus
