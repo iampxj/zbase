@@ -2,7 +2,6 @@
  * Copyright 2024 wtcat
  */
 
-#include <cerrno>
 #define pr_fmt(fmt) "<mod>: "fmt
 #include <errno.h>
 #include <string.h>
