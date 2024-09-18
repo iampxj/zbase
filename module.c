@@ -2,6 +2,10 @@
  * Copyright 2024 wtcat
  */
 
+#ifdef CONFIG_HEADER_FILE
+#include CONFIG_HEADER_FILE
+#endif
+
 #define pr_fmt(fmt) "<mod>: "fmt
 #include <errno.h>
 #include <string.h>
@@ -13,24 +17,26 @@
 #include "basework/os/osapi_fs.h"
 #include "basework/malloc.h"
 #include "basework/log.h"
+#include "basework/idr.h"
 
 struct module_runtime {
     SLIST_ENTRY(module_runtime) link;
     struct module *mod;
     struct module_class *m_op;
-    uint32_t id;
+    int id;
     int refcnt;
     int state;
 };
 
-#define MODULE_LOCK_INIT() os_mtx_init(&module_mtx, 0)
-#define MODULE_LOCK()      os_mtx_lock(&module_mtx)
-#define MODULE_UNLOCK()    os_mtx_unlock(&module_mtx)
+#define MODULE_LOCK_INIT() os_mtx_init(&mod_mutex, 0)
+#define MODULE_LOCK()      os_mtx_lock(&mod_mutex)
+#define MODULE_UNLOCK()    os_mtx_unlock(&mod_mutex)
 
-static os_mutex_t module_mtx;
-static uint32_t module_id;
-static SLIST_HEAD(, module_runtime) module_list = 
-    SLIST_HEAD_INITIALIZER(module_list);
+static os_mutex_t mod_mutex;
+static SLIST_HEAD(, module_runtime) mod_list = 
+    SLIST_HEAD_INITIALIZER(mod_list);
+static struct idr *mod_idr;
+IDR_DEFINE(module, 1, 16)
 
 static void module_setup(struct module *m) {
     uintptr_t base = (uintptr_t)m;
@@ -43,16 +49,6 @@ static void module_setup(struct module *m) {
     memcpy((void *)m->data_start, (void *)m->ldata_start, 
         m->data_size);
     memset((void *)m->bss_start, 0, m->bss_size);
-}
-
-static struct module_runtime *
-module_find(uint32_t id) {
-    struct module_runtime *rt;
-    SLIST_FOREACH(rt, &module_list, link) {
-        if (id == rt->id)
-            return rt;
-    }
-    return NULL;
 }
 
 static int module_check(const struct module *m) {
@@ -85,19 +81,25 @@ static int __module_load(struct module_runtime *rt, struct module *m,
     }
 
     err = 0;
+    rt->id = idr_alloc(mod_idr, rt);
+    if (rt->id < 0) {
+        err = rt->id;
+        goto _unlock;
+    }
+
     rt->state = MODULE_STATE_LOADING;
     module_setup(m);
     err = m->load(api);
-    if (err)
+    if (err) {
+        idr_remove(mod_idr, rt->id);
         goto _unlock;
+    }
     
     rt->state = MODULE_STATE_LOADED;
     rt->m_op = api;
     rt->mod = m;
     rt->refcnt = 0;
-    rt->id = module_id++;
-    SLIST_INSERT_HEAD(&module_list, rt, link);
-
+    SLIST_INSERT_HEAD(&mod_list, rt, link);
 _unlock:
     MODULE_UNLOCK();
     return err;
@@ -122,7 +124,8 @@ static int __module_unload(struct module_runtime *rt) {
         }
     }
     rt->state = MODULE_STATE_IDLE;
-    SLIST_REMOVE(&module_list, rt, module_runtime, link);
+    SLIST_REMOVE(&mod_list, rt, module_runtime, link);
+    idr_remove(mod_idr, rt->id);
     general_free(rt->mod);
 
 _unlock:
@@ -237,12 +240,13 @@ int moudule_unload(uint32_t id) {
     int err;
 
     MODULE_LOCK();
-    rt = module_find(id);
+    rt = idr_find(mod_idr, id);
     if (rt == NULL) {
         err = -ENODATA;
         goto _unlock;
     }
     err = __module_unload(rt);
+
 _unlock:
     MODULE_UNLOCK();
     return err;
@@ -253,7 +257,7 @@ int module_get(uint32_t id) {
     int err;
 
     MODULE_LOCK();
-    rt = module_find(id);
+    rt = idr_find(mod_idr, id);
     if (rt) 
         rt->refcnt++;
     else
@@ -267,7 +271,7 @@ int module_put(uint32_t id) {
     int err = 0;
 
     MODULE_LOCK();
-    rt = module_find(id);
+    rt = idr_find(mod_idr, id);
     if (rt) {
         if (rt->refcnt > 0) {
             rt->refcnt--;
@@ -287,5 +291,6 @@ _unlock:
 
 int module_init(void) {
     MODULE_LOCK_INIT();
+    mod_idr = module_idr_create();
     return 0;
 }
