@@ -1,0 +1,33 @@
+{
+	"description": "Global Partition Table",
+	"version": "1.0.0",
+	"devices": [
+		{
+			"name": "norFlash",
+			"capacity": "0x2000000",
+			"storage": "spi_flash",
+			"partitions": [
+				{
+					"label": "picture",
+					"offset": "0x400000",
+					"size": "0x400000"
+				},
+				{
+					"label": "font",
+					"offset": "0x800000",
+					"size": "0x800000"
+				},
+				{
+					"label": "watchface",
+					"offset": "0x1000000",
+					"size": "0x300000"
+				},
+				{
+					"label": "reserved",
+					"offset": "0x1300000",
+					"size": "0x200000"
+				}
+			]
+		}
+	]
+}

@@ -45,7 +45,7 @@ TEST(fifofs, read_write) {
 
     for (int i = 0; i < 10; i++) {
         printf("%d> send %lu bytes\n", i, sizeof(text));
-        EXPECT_EQ(vfs_write(fd, text, sizeof(text)), sizeof(text));
+        EXPECT_EQ(vfs_write(fd, text, sizeof(text)), (ssize_t)sizeof(text));
         usleep(1000000);
     }
 

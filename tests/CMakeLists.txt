@@ -24,7 +24,8 @@ if (NOT WINDOWS)
         # ${CMAKE_CURRENT_SOURCE_DIR}/rb_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/ahash_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/circlebuf_test.cc
-        ${CMAKE_CURRENT_SOURCE_DIR}/fifofs_test.cc
+        # ${CMAKE_CURRENT_SOURCE_DIR}/fifofs_test.cc
+        ${CMAKE_CURRENT_SOURCE_DIR}/idr_test.cc
     )
 endif()
 

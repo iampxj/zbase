@@ -46,6 +46,7 @@ zephyr_library_sources(
 	system.c
     params.c
     module.c
+    idr.c
 )
 zephyr_library_sources_ifdef(CONFIG_FLASHTRACE
     tools/flash_trace.c
