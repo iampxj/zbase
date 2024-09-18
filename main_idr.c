@@ -13,10 +13,24 @@ struct idr {
 	unsigned int idr_count;
 };
 
+#define IDR_BUFSZ(_min, _nr) (sizeof(struct idr) + (_nr) * sizeof(void *))
+#define IDR_DEFINE(_name, _min, _nr) \
+	static char _name##_idr_buffer[IDR_BUFSZ(_min, _nr)] \
+		__attribute__((aligned(sizeof(void *)))); \
+	static struct idr *_name##_idr_create(void) { \
+		struct idr *idr = (struct idr *)_name##_idr_buffer; \
+		__idr_init(idr, _min, _nr); \
+		return idr; \
+	}
+
 static inline int __idr_init(struct idr *idr, unsigned int base, 
 	unsigned int count) {
-	char *p = (char *)(idr + 1);
+	if (idr == NULL)
+		return -EINVAL;
+	if (count == 0)
+		return -EINVAL;
 
+	char *p = (char *)(idr + 1);
 	idr->idr_list = NULL;
     idr->idr_count = count;
     idr->idr_base  = base;
@@ -60,16 +74,17 @@ static inline void *idr_find(struct idr *idr, unsigned int id) {
 }
 
 
-#define IDR_NSIZE(_nr) (sizeof(struct idr) + (_nr) * sizeof(void *))
-static char idr_buffer[IDR_NSIZE(3)] __attribute__((aligned(8)));
-static struct idr *idr_inst = (struct idr *)idr_buffer;
+IDR_DEFINE(test, 10, 3)
+static struct idr *idr_inst;
+
 
 int main(int argc, char *argv[]) {
 
     uint32_t varray[4] = {1, 2, 3, 4};
     uint32_t ids[4] = {0};
 
-    __idr_init(idr_inst, 10, 3);
+	idr_inst = test_idr_create();
+    // __idr_init(idr_inst, 10, 3);
     for (int i = 0; i < 4; i++) {
         int id = idr_alloc(idr_inst, &varray[i]);
         ids[i] = (uint32_t)id;
