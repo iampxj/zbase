@@ -13,6 +13,7 @@ os_critical_global_declare
 int	__idr_init(struct idr *idr, unsigned int base, unsigned int count) {
 	if (idr == NULL)
 		return -EINVAL;
+		
 	if (count == 0)
 		return -EINVAL;
 
@@ -32,7 +33,10 @@ int	__idr_init(struct idr *idr, unsigned int base, unsigned int count) {
 }
 
 int idr_alloc(struct idr *idr, void *ptr) {
-	os_critical_declare 
+	os_critical_declare
+
+	if (idr == NULL)
+		return -EINVAL;
 
 	os_critical_lock 
 	void *p = (void *)(((unsigned long)idr->idr_list >> 1) << 1);
@@ -48,7 +52,11 @@ int idr_alloc(struct idr *idr, void *ptr) {
 }
 
 int idr_remove(struct idr *idr, unsigned int id) {
-	os_critical_declare 
+	os_critical_declare
+
+	if (idr == NULL)
+		return -EINVAL;
+
 	unsigned rid = id - idr->idr_base;
 	if (rte_unlikely(rid >= idr->idr_count))
 		return -EINVAL;

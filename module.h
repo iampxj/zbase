@@ -40,8 +40,8 @@ struct module {
     uintptr_t  bss_start;  /* .bss section  */
     uintptr_t  bss_size;
 
-    int (*load)(struct module_class *api);
-    int (*unload)(struct module_class *api);
+    int (*load)(const struct module_class *mod);
+    int (*unload)(const struct module_class *mod);
 };
 
 /*
@@ -57,24 +57,26 @@ struct module {
  */
 #ifdef MODULE_LOADABLE
 extern char _stext[];
-extern char _etext[];
+extern char _stext_size[];
 extern char _sdata[];
-extern char _edata[];
+extern char _sdata_size[];
 extern char _sbss[];
-extern char _ebss[];
+extern char _sbss_size[];
+extern char _eronly[];
+extern char _module_end[];
 
-#define module_install(_name, _load_fn, _unload_fn) \
-    struct module _name##__module __attribute__((section(".vectors"))) = { \
+#define module_install(_load_fn, _unload_fn) \
+    struct module _this_module __attribute__((section(".vectors"))) = { \
         .magic         = MODULE_MAGIC, \
         .cid           = MODULE_COMPILER_ID, \
         .mod_size      = (uintptr_t)_module_end, \
         .text_start    = (uintptr_t)_stext, \
-        .text_size     = (uintptr_t)(_etext - _stext), \
+        .text_size     = (uintptr_t)_stext_size, \
         .data_start    = (uintptr_t)_sdata, \
-        .data_size     = (uintptr_t)(_edata - _sdata), \
-        .ldata_start   = 0, \
+        .data_size     = (uintptr_t)_sdata_size, \
+        .ldata_start   = (uintptr_t)_eronly, \
         .bss_start     = (uintptr_t)_sbss, \
-        .bss_size      = (uintptr_t)(_ebss - _sbss), \
+        .bss_size      = (uintptr_t)_sbss_size, \
         .load          = _load_fn, \
         .unload        = _unload_fn \
     }

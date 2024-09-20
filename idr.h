@@ -5,7 +5,9 @@
 #define BASEWORK_IDR_H_
 
 #include <stddef.h>
+
 #include "basework/compiler.h"
+#include "basework/assert.h"
 
 #ifdef __cplusplus
 extern "C"{
@@ -67,11 +69,12 @@ int idr_remove(struct idr *idr, unsigned int id);
  * @return user data if success
  */
 static inline void *idr_find(struct idr *idr, unsigned int id) {
-    unsigned rid = id - idr->idr_base;
+	rte_assert(idr != NULL);
+    unsigned int rid = id - idr->idr_base;
 	if (rte_unlikely(rid >= idr->idr_count))
 		return NULL;
-	return !((unsigned long)idr->idr_table[rid] & 1)? 
-		idr->idr_table[rid]: NULL;
+	void *ptr = idr->idr_table[rid];
+	return !((unsigned long)ptr & 1)? ptr: NULL;
 }
 
 #ifdef __cplusplus

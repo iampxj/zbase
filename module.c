@@ -141,7 +141,7 @@ int module_load_fromfile(const char *file, struct module_class *api,
     size_t msize;
     int ret;
 
-    if (file == NULL)
+    if (file == NULL || api == NULL || id == NULL)
         return -EINVAL;
 
     ret = vfs_stat(file, &stat);
@@ -199,7 +199,7 @@ int module_load_frommem(void *code, size_t size, struct module_class *api,
     size_t msize;
     int ret;
 
-    if (p == NULL)
+    if (p == NULL || api == NULL || id == NULL)
         return -EINVAL;
 
     if (size < sizeof(*p)) 
