@@ -119,6 +119,7 @@ _os_thread_spawn(os_thread_t *thread, const char *name,
 
 OS_THREAD_API int 
 _os_thread_destroy(os_thread_t *thread) {
+    (void) thread;
     return -ENOSYS;
 }
 
@@ -187,6 +188,8 @@ _os_mtx_unlock(os_mutex_t *mtx) {
 
 OS_MTX_API int 
 _os_mtx_timedlock(os_mutex_t *mtx, uint32_t timeout) {
+    (void) mtx;
+    (void) timeout;
     return -ENOSYS;
 }
 
@@ -196,6 +199,7 @@ _os_mtx_trylock(os_mutex_t *mtx) {
 }
 
 OS_CV_API int _os_cv_init(os_cond_t *cv, void *data) {
+    (void) data;
 	return pthread_cond_init(&cv->cv, NULL);
 }
 

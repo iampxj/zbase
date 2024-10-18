@@ -183,6 +183,7 @@ ssize_t bcache_blkdev_write(struct bcache_device *dd, const void *buffer,
 	size_t count, off_t offset);
 ssize_t bcache_blkdev_read(struct bcache_device *dd, void *buffer, 
 	size_t count, off_t offset);
+int bcache_blkdev_sync(bool purge_dev);
 int bcache_blkdev_ioctl(struct bcache_device *dd, unsigned int request,
 	void *buffer);
 
@@ -455,6 +456,7 @@ typedef enum {
  * speed-up buffer lookup descriptors are organized in AVL-Tree. The fields
  * 'dd' and 'block' are search keys.
  */
+#ifndef __cplusplus
 struct bcache_buffer {
 	struct rte_list link;
 
@@ -478,6 +480,9 @@ struct bcache_buffer {
 	int references;
 	void *user;
 };
+#else /* __cplusplus */
+struct bcache_buffer;
+#endif /* !__cplusplus */
 
 /**
  * A group is a continuous block of buffer descriptors. A group covers the

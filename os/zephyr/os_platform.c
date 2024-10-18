@@ -397,6 +397,11 @@ static int __rte_unused __rte_notrace platform_flash_init(void) {
                 pr_err("Register disk device failed: %d\n", err);
                 return err;
             }
+
+    #ifdef CONFIG_BCACHE
+        extern int platform_bdev_register(struct disk_device *dd);
+        platform_bdev_register(dd);
+    #endif
         }
     }
 

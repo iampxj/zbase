@@ -6,8 +6,6 @@
 #define CONFIG_LOGLEVEL LOGLEVEL_DEBUG
 
 #include <errno.h>
-#include <device.h>
-#include <drivers/flash.h>
 
 #include "basework/generic.h"
 #include "basework/malloc.h"
@@ -17,7 +15,7 @@
 #include "basework/log.h"
 
 struct flash_context {
-	const struct device *dev;
+	struct disk_device *dev;
 	uint32_t start;
 	uint32_t size;
 	uint32_t blksize;
@@ -31,24 +29,24 @@ bdev_io_request(struct flash_context *ctx, struct bcache_request *r,
 
 	switch (r->req) {
 	case BCACHE_DEV_REQ_READ:
-		pr_dbg("%s read %d blocks (blksize: %d)\n", __func__, r->bufs, blksize);
+		pr_dbg("%s read %d blocks (blksize: %d)\n", __func__, r->bufnum, blksize);
 		for (uint32_t i = 0; i < r->bufnum; i++, sg++) {
 			uint32_t offset = ctx->start + sg->block * blksize;
-			err = flash_read(ctx->dev, offset, sg->buffer, sg->length);
-			if (err)
+			err = disk_device_read(ctx->dev, sg->buffer, sg->length, offset);
+			if (err < 0)
 				break;
 		}
 		break;
 	case BCACHE_DEV_REQ_WRITE:
-		pr_dbg("%s write %d blocks (blksize: %d)\n", __func__, r->bufs, blksize);
+		pr_dbg("%s write %d blocks (blksize: %d)\n", __func__, r->bufnum, blksize);
 		for (uint32_t i = 0; i < r->bufnum; i++, sg++) {
 			uint32_t offset = ctx->start + sg->block * blksize;
-			err = flash_erase(ctx->dev, offset, blksize);
-			if (rte_unlikely(err))
+			err = disk_device_erase(ctx->dev, offset, blksize);
+			if (rte_unlikely(err < 0))
 				break;
 
-			err = flash_write(ctx->dev, offset, sg->buffer, sg->length);
-			if (rte_unlikely(err))
+			err = disk_device_write(ctx->dev, sg->buffer, sg->length, offset);
+			if (rte_unlikely(err < 0))
 				break;
 		}
 		break;
@@ -56,7 +54,7 @@ bdev_io_request(struct flash_context *ctx, struct bcache_request *r,
 		return -EINVAL;
 	}
 
-	bcache_request_done(r, err);
+	bcache_request_done(r, err < 0? err: 0);
 	return err;
 }
 
@@ -75,7 +73,7 @@ platform_bdev_register(struct disk_device *dd) {
 
 	media = general_malloc(sizeof(*media));
 	if (media) {
-		media->dev = (struct device *)dd->dev;
+		media->dev = dd;
 		media->start = dd->addr;
 		media->size = dd->len;
 		media->blksize = dd->blk_size;
@@ -92,7 +90,7 @@ platform_bdev_register(struct disk_device *dd) {
 			general_free(media);
 			return err;
 		}
-		
+
 		return 0;
 	}
 	

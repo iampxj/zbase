@@ -24,8 +24,9 @@ struct module_runtime;
 # error "Unknown compiler"
 #endif 
 
-struct module_runtime;
 struct module_class;
+struct module_runtime;
+typedef void *(*modns_find_t)(const char *ns);
 
 struct module {
 #define MODULE_MAGIC 0xFDFDFDFD 
@@ -40,12 +41,14 @@ struct module {
     uintptr_t  bss_start;  /* .bss section  */
     uintptr_t  bss_size;
 
-    int (*load)(const struct module_class *mod);
-    int (*unload)(const struct module_class *mod);
+    int (*load)(struct module_class *api);
+    int (*unload)(struct module_class *api);
+    int (*event_in)(int event, void *param);
+    int (*event_out)(int event);
 };
 
 /*
- * Moudle state
+ * Moudule state
  */
 #define MODULE_STATE_IDLE       0
 #define MODULE_STATE_UNLOADING  1
@@ -65,7 +68,7 @@ extern char _sbss_size[];
 extern char _eronly[];
 extern char _module_end[];
 
-#define module_install(_load_fn, _unload_fn) \
+#define module_install(_init_fn, _exit_fn) \
     struct module _this_module __attribute__((section(".vectors"))) = { \
         .magic         = MODULE_MAGIC, \
         .cid           = MODULE_COMPILER_ID, \
@@ -77,8 +80,8 @@ extern char _module_end[];
         .ldata_start   = (uintptr_t)_eronly, \
         .bss_start     = (uintptr_t)_sbss, \
         .bss_size      = (uintptr_t)_sbss_size, \
-        .load          = _load_fn, \
-        .unload        = _unload_fn \
+        .load          = _init_fn, \
+        .unload        = _exit_fn \
     }
 #endif /* MODULE_LOADABLE */
 

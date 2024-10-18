@@ -2681,7 +2681,7 @@ bcache_blkdev_read(struct bcache_device *dd, void *buffer,
 	int rv;
 
 	block = offset >> dd->block_size_shift;
-	block_offset = offset & (dd->block_size_shift - 1);
+	block_offset = offset & (dd->block_size - 1);
 
 	while (remaining > 0) {
 		struct bcache_buffer *bd;
@@ -2720,7 +2720,7 @@ bcache_blkdev_write(struct bcache_device *dd, const void *buffer,
 	int rv;
 
 	block = offset >> dd->block_size_shift;
-	block_offset = offset & (dd->block_size_shift - 1);
+	block_offset = offset & (dd->block_size - 1);
 
 	while (remaining > 0) {
 		struct bcache_buffer *bd;
@@ -2819,6 +2819,27 @@ bcache_blkdev_find(const char* device) {
 	}
 	bcache_unlock_cache();
 	return NULL;
+}
+
+int bcache_blkdev_sync(bool purge_dev) {
+	struct rte_list *pos;
+	int err;
+
+	bcache_lock_cache();
+	rte_list_foreach(pos, &bdbuf_cache.dev_nodes) {
+		struct bcache_devnode *devn = rte_container_of(pos, 
+			struct bcache_devnode, link);
+		bcache_unlock_cache();
+		err = bcache_syncdev(&devn->dev);
+		if (err)
+			return err;
+		
+		if (purge_dev)
+			bcache_purge_dev(&devn->dev);
+		bcache_lock_cache();
+	}
+	bcache_unlock_cache();
+	return 0;
 }
 
 

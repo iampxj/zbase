@@ -1,6 +1,7 @@
 /*
  * Copyright 2022 wtcat
  */
+#define __RTE_READ_ONCE(x) (x)
 #include <string.h>
 
 #include "basework/dev/blkdev.h"

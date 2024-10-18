@@ -32,10 +32,6 @@ endif()
 
 
 if (CONFIG_BCACHE)
-zephyr_library_named(bcache)
-zephyr_library_compile_options(
-    -O2
-)
 zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/bcache.c
 )

@@ -17,9 +17,10 @@
 #include "basework/log.h"
 #include "basework/dev/disk.h"
 #include "basework/dev/blkdev.h"
-#include "basework/os/osapi.h"
 
-os_critical_global_declare
+#define DISK_FOREACH(dd) \
+    SLIST_FOREACH(dd, &disk_head, next)
+
 static SLIST_HEAD(disk_list, disk_device) disk_head;
 
 static inline const char *disk_get_name(struct disk_device *dd) {
@@ -27,10 +28,16 @@ static inline const char *disk_get_name(struct disk_device *dd) {
     return dd->get_name(dd->dev);
 }
 
+struct disk_device *disk_device_next(struct disk_device *dd) {
+    if (dd != NULL)
+        return SLIST_NEXT(dd, next);
+    return SLIST_FIRST(&disk_head);
+}
+
 int disk_device_open(const char *name, struct disk_device **dd) {
     struct disk_device *pd;
     rte_assert(dd != NULL);
-    SLIST_FOREACH(pd, &disk_head, next) {
+    DISK_FOREACH(pd) {
         if (!strcmp(disk_get_name(pd), name)) {
             *dd = pd;
             return 0;
@@ -131,7 +138,7 @@ int disk_device_ioctl(struct disk_device *dd, long cmd, void *arg) {
 }
 
 int disk_device_register(struct disk_device *dd) {
-    os_critical_declare
+    struct disk_device *pd;
 
     if (dd == NULL) {
         pr_err("invalid parameter\n");
@@ -153,11 +160,14 @@ int disk_device_register(struct disk_device *dd) {
         return -EINVAL;
     }
 
+    DISK_FOREACH(pd) {
+        if (pd == dd)
+            return -EEXIST;
+    }
+
 #ifndef CONFIG_BOOTLOADER   
-    blkdev_init();
+    blkdev_init(dd);
 #endif
-    os_critical_lock
     SLIST_INSERT_HEAD(&disk_head, dd, next);
-    os_critical_unlock
     return 0;
 }

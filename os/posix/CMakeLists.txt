@@ -11,6 +11,13 @@ target_sources(basework
     os_unix_impl.c
 )
 
+if (CONFIG_BCACHE)
+target_sources(basework
+    PRIVATE
+    os_bcachedev.c
+)
+endif()
+
 if (CONFIG_XIPFS)
     target_sources(basework
         PRIVATE

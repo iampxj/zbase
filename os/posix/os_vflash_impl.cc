@@ -13,6 +13,10 @@
 #define FLASH_PGSZ 4096
 #define FLASH_CAPACITY (5 *1024 * 1024)
 
+#ifdef CONFIG_BCACHE
+extern "C" int platform_bdev_register(struct disk_device *dd);
+#endif
+
 static char virtual_flash_memory[FLASH_CAPACITY];
 
 static const char *virt_flash_get_name(device_t dd) {
@@ -69,5 +73,9 @@ CC_INIT(posix_vflash, kDeviceOrder, 10) {
     assert(err == 0);
     err = partitions_configure_build(0, FLASH_CAPACITY, FLASH_DEVNAME, false);
     assert(err == 0);
+
+#ifdef CONFIG_BCACHE
+    assert(platform_bdev_register(&vdisk) == 0);
+#endif
     return err;
 }

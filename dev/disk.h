@@ -22,6 +22,9 @@ struct disk_device {
     uint32_t addr;
     size_t len;
     size_t blk_size; /* the block size in the flash for erase minimum granularity */
+
+    void *bdev; /* Pointer to block device */
+
     const char *(*get_name)(device_t dd);
     int (*read)(device_t dd, void *buf, size_t size, long offset);
     int (*write)(device_t dd, const void *buf, size_t size, long offset);
@@ -35,6 +38,7 @@ struct disk_device {
 #define DISK_GETBLKSIZE  0x10
 #define DISK_GETCAPACITY 0x11
 
+struct disk_device *disk_device_next(struct disk_device *dd);
 int disk_device_open(const char *name, struct disk_device **dd);
 int disk_device_close(struct disk_device *dd);
 int disk_device_write(struct disk_device *dd, const void *buf, size_t size, long offset);

@@ -8,10 +8,11 @@
 #include CONFIG_HEADER_FILE
 #endif
 
-#define pr_fmt(fmt) "blkdev: "fmt
+#define pr_fmt(fmt) "<blkdev>: "fmt
 #include <assert.h>
 #include <string.h>
 
+#include "basework/assert.h"
 #include "basework/container/list.h"
 #include "basework/dev/disk.h"
 #include "basework/dev/partition.h"
@@ -60,36 +61,42 @@ struct bh_statitics {
     long cache_missed;
 };
 
-#define MTX_LOCK()   os_mtx_lock(&bh_mtx)
-#define MTX_UNLOCK() os_mtx_unlock(&bh_mtx)
-#define MTX_LOCK_INIT() os_mtx_init(&bh_mtx, 0)
+struct block_device {
+    os_mutex_t mtx;
+    struct disk_device *dd;
+    struct rte_list cached_list;
+    struct rte_list dirty_list;
+    struct rte_list link;
+    struct bh_desc *bh;
+    char *buffer;
+    struct bh_statitics stat;
+};
 
-
-static os_mutex_t bh_mtx;
 static os_timer_t bh_timer;
-static void *bh_buffer;
-static bool bh_initialized;
-static struct bh_statitics bh_statistics;
-static RTE_LIST(cached_list);
-static RTE_LIST(dirty_list);
+static RTE_LIST(created_list);
+static os_mutex_t bdev_mutex;
 
-static inline void bh_enqueue_dirty(struct bh_desc *bh) {
+static inline void 
+bh_enqueue_dirty(struct block_device *bdev, struct bh_desc *bh) {
     bh->hold = CONFIG_BLKDEV_HOLD_TIME;
-    rte_list_add_tail(&bh->link, &dirty_list);
+    rte_list_add_tail(&bh->link, &bdev->dirty_list);
 }
 
-static inline void bh_enqueue_cached(struct bh_desc *bh) {
-    rte_list_add_tail(&bh->link, &cached_list);
+static inline void 
+bh_enqueue_cached(struct block_device *bdev, struct bh_desc *bh) {
+    rte_list_add_tail(&bh->link, &bdev->cached_list);
 }
 
-static int blkdev_sync_locked(long expired, int max_blks, bool invalid) {
+static int 
+blkdev_sync_locked(struct block_device *bdev, long expired, 
+    int max_blks, bool invalid) {
     struct rte_list *pos, *next;
     struct disk_device *dd;
     struct bh_desc *bh;
     uint32_t ofs;
     int err = 0;
 
-    rte_list_foreach_safe(pos, next, &dirty_list) {
+    rte_list_foreach_safe(pos, next, &bdev->dirty_list) {
         bh = rte_container_of(pos, struct bh_desc, link);
         if (bh->hold > expired) {
             bh->hold -= expired;
@@ -101,6 +108,7 @@ static int blkdev_sync_locked(long expired, int max_blks, bool invalid) {
             break;
 
         dd = bh->dd;
+        rte_assert(bdev->dd == dd);
         ofs = bh->dd->blk_size * bh->blkno;
 		pr_dbg("blkdev_sync_locked(%ld) blkno(%d) offset(0x%x) size(%d)\n", expired, 
 			bh->blkno, ofs, dd->blk_size);
@@ -122,36 +130,54 @@ static int blkdev_sync_locked(long expired, int max_blks, bool invalid) {
         } else {
             bh->state = BH_STATE_CACHED;
         }
-        bh_enqueue_cached(bh);
+        bh_enqueue_cached(bdev, bh);
     }
 
     return 0;
 }
 
-static void bh_check_cb(os_timer_t timer, void *arg) {
+static int 
+bdev_sync(long expired, int max_blks, bool invalid) {
+    struct rte_list *pos;
+    int err = 0;
+
+    os_mtx_lock(&bdev_mutex);
+    rte_list_foreach(pos, &created_list) {
+        struct block_device *bdev = rte_container_of(pos, 
+            struct block_device, link);
+        os_mtx_lock(&bdev->mtx);
+        err |= blkdev_sync_locked(bdev, expired, max_blks, invalid);
+        os_mtx_unlock(&bdev->mtx);
+    }
+    os_mtx_unlock(&bdev_mutex);
+    return err;
+}
+
+static void 
+bh_check_cb(os_timer_t timer, void *arg) {
     (void) arg;
-    MTX_LOCK();
-    int err = blkdev_sync_locked(CONFIG_BLKDEV_SWAP_PERIOD, 3, false);
-    MTX_UNLOCK();
+    int err = bdev_sync(CONFIG_BLKDEV_SWAP_PERIOD, 3, false);
     if (err) {
         pr_warn("flush data failed(%d)\n", err);
     }
     os_timer_mod(timer, CONFIG_BLKDEV_SWAP_PERIOD);
 }
 
-static int bh_release_modified(struct bh_desc *bh) {
+static int 
+bh_release_modified(struct block_device *bdev, struct bh_desc *bh) {
     bh->state = BH_STATE_DIRTY;
-    bh_enqueue_dirty(bh);
-    MTX_UNLOCK();
+    bh_enqueue_dirty(bdev, bh);
+    os_mtx_unlock(&bdev->mtx);
     return 0;
 }
 
-static int bh_release(struct bh_desc *bh) {
+static int 
+bh_release(struct block_device *bdev, struct bh_desc *bh) {
     if (bh->state == BH_STATE_DIRTY)
-        bh_enqueue_dirty(bh);
+        bh_enqueue_dirty(bdev, bh);
     else
-        bh_enqueue_cached(bh);
-    MTX_UNLOCK();
+        bh_enqueue_cached(bdev, bh);
+    os_mtx_unlock(&bdev->mtx);
     return 0;
 }
 
@@ -159,65 +185,68 @@ static int bh_release(struct bh_desc *bh) {
  * The cache block search use list is simplest but not fit lots of blocks
  * If so should use balance binrary tree
  */
-static struct bh_desc *bh_search_locked(struct disk_device *dd, uint32_t blkno) {
+static struct bh_desc *bh_search_locked(struct block_device *bdev, uint32_t blkno) {
     struct rte_list *pos, *next;
     struct bh_desc *bh;
 
-    rte_list_foreach_safe(pos, next, &cached_list) {
+    rte_list_foreach_safe(pos, next, &bdev->cached_list) {
         bh = rte_container_of(pos, struct bh_desc, link);
-        if (bh->dd == dd && bh->blkno == blkno) {
-            bh_statistics.cache_hits++;
+        if (bh->blkno == blkno) {
+            rte_assert(bdev->dd == bh->dd);
+            bdev->stat.cache_hits++;
             rte_list_del(&bh->link);
             return bh;
         }
     }
-    rte_list_foreach_safe(pos, next, &dirty_list) {
+    rte_list_foreach_safe(pos, next, &bdev->dirty_list) {
         bh = rte_container_of(pos, struct bh_desc, link);
-        if (bh->dd == dd && bh->blkno == blkno) {
-            bh_statistics.cache_hits++;
+        if (bh->blkno == blkno) {
+            rte_assert(bdev->dd == bh->dd);
+            bdev->stat.cache_hits++;
             rte_list_del(&bh->link);
             return bh;
         }
     }
-    if (rte_list_empty(&cached_list)) 
-        blkdev_sync_locked(CONFIG_BLKDEV_HOLD_TIME, 1, false);
+    if (rte_list_empty(&bdev->cached_list)) 
+        blkdev_sync_locked(bdev, CONFIG_BLKDEV_HOLD_TIME, 1, false);
     
-    bh_statistics.cache_missed++;
-    bh = rte_container_of(cached_list.next, struct bh_desc, link);
+    bdev->stat.cache_missed++;
+    bh = rte_container_of(bdev->cached_list.next, struct bh_desc, link);
     rte_list_del(&bh->link);
     bh->blkno = blkno;
-    bh->dd = dd;
     bh->state = BH_STATE_INVALD;
     return bh;
 }
 
-static int bh_get(struct disk_device *dd, uint32_t blkno, struct bh_desc **pbh) {
+static int 
+bh_get(struct block_device *bdev, uint32_t blkno, struct bh_desc **pbh) {
     struct bh_desc *bh;
 
-    MTX_LOCK();
-    bh = bh_search_locked(dd, blkno);
+    os_mtx_lock(&bdev->mtx);
+    bh = bh_search_locked(bdev, blkno);
     assert(bh != NULL);
     *pbh = bh;
     return 0;
 }
 
-static int bh_read(struct disk_device *dd, uint32_t blkno, struct bh_desc **pbh) {
+static int 
+bh_read(struct block_device *bdev, uint32_t blkno, struct bh_desc **pbh) {
     struct bh_desc *bh;
     uint32_t ofs;
     int err;
 
-    MTX_LOCK();
-    bh = bh_search_locked(dd, blkno);
+    os_mtx_lock(&bdev->mtx);
+    bh = bh_search_locked(bdev, blkno);
     if (bh->state != BH_STATE_INVALD) {
         *pbh = bh;
         return 0;
     }
 
-    ofs = dd->blk_size * bh->blkno;
-    err = disk_device_read(dd, bh->buffer, dd->blk_size, ofs);
+    ofs = bdev->dd->blk_size * bh->blkno;
+    err = disk_device_read(bdev->dd, bh->buffer, bdev->dd->blk_size, ofs);
     if (err < 0) {
-        bh_release(bh);
-        pr_err("Read disk failed(offset: 0x%x size: %d)\n", ofs, dd->blk_size);
+        bh_release(bdev, bh);
+        pr_err("Read disk failed(offset: 0x%x size: %d)\n", ofs, bdev->dd->blk_size);
         return err;
     }
 
@@ -226,25 +255,62 @@ static int bh_read(struct disk_device *dd, uint32_t blkno, struct bh_desc **pbh)
     return 0;
 }
 
-int blkdev_sync(void) {
-    MTX_LOCK();
-    int err = blkdev_sync_locked(CONFIG_BLKDEV_HOLD_TIME, 
-        INT32_MAX, false);
-    MTX_UNLOCK();
-    return err;
+static int 
+bdev_init(struct disk_device *dd, int nrblk) {
+    struct block_device *bdev;
+    size_t bdev_size;
+    size_t size;
+
+    if (dd == NULL || nrblk == 0)
+        return -EINVAL;
+
+    if (dd->bdev)
+        return -EEXIST;
+
+    size = dd->blk_size + sizeof(struct bh_desc);
+    bdev_size = RTE_ALIGN(sizeof(*bdev), RTE_CACHE_LINE_SIZE);
+    bdev = general_malloc(bdev_size + size * nrblk);
+    assert(bdev != NULL);
+
+    memset(bdev, 0, sizeof(*bdev));
+    os_mtx_init(&bdev->mtx, 0);
+    RTE_INIT_LIST(&bdev->cached_list);
+    RTE_INIT_LIST(&bdev->dirty_list);
+    bdev->bh = (struct bh_desc *)((char *)bdev + bdev_size);
+    
+    for (int i = 0; i < nrblk; i++) {
+        bdev->bh->blkno = (size_t)-1;
+        bdev->bh->buffer = (char *)(bdev->bh + 1);
+        bdev->bh->state = BH_STATE_INVALD;
+        bdev->bh->dd = dd;
+        rte_list_add(&bdev->bh->link, &bdev->cached_list);
+        bdev->bh = (void *)((char *)bdev->bh + size);
+    }
+
+    os_mtx_lock(&bdev_mutex);
+    rte_list_add_tail(&bdev->link, &created_list);
+    os_mtx_unlock(&bdev_mutex);
+
+    bdev->dd = dd;
+    dd->bdev = bdev;
+    return 0;
 }
 
-int blkdev_sync_invalid(void) {
-    MTX_LOCK();
-    int err = blkdev_sync_locked(CONFIG_BLKDEV_HOLD_TIME, 
-        INT32_MAX, true);
-    MTX_UNLOCK();
-    return err;
+int 
+simple_blkdev_sync(void) {
+    return bdev_sync(CONFIG_BLKDEV_HOLD_TIME, INT32_MAX, false);
 }
 
-ssize_t blkdev_write(struct disk_device *dd, const void *buf, size_t size, 
+int 
+simple_blkdev_sync_invalid(void) {
+    return bdev_sync(CONFIG_BLKDEV_HOLD_TIME, INT32_MAX, true);
+}
+
+ssize_t 
+simple_blkdev_write(struct disk_device *dd, const void *buf, size_t size, 
     uint32_t offset) {
     const char *src = (const char *)buf;
+    struct block_device *bdev = dd->bdev;
     struct bh_desc *bh;
     size_t remain = size;
     size_t bytes;
@@ -257,9 +323,9 @@ ssize_t blkdev_write(struct disk_device *dd, const void *buf, size_t size,
 
     while (remain > 0) {
         if (blkofs == 0 && remain >= dd->blk_size)
-            err = bh_get(dd, blkno, &bh);
+            err = bh_get(bdev, blkno, &bh);
         else
-            err = bh_read(dd, blkno, &bh);
+            err = bh_read(bdev, blkno, &bh);
         if (err)
             return err;
 
@@ -268,7 +334,7 @@ ssize_t blkdev_write(struct disk_device *dd, const void *buf, size_t size,
             bytes = remain;
 
         memcpy(bh->buffer + blkofs, src, bytes);
-        bh_release_modified(bh);
+        bh_release_modified(bdev, bh);
         remain -= bytes;
         src += bytes;
         blkofs = 0;
@@ -278,8 +344,10 @@ ssize_t blkdev_write(struct disk_device *dd, const void *buf, size_t size,
     return size - remain;
 }
 
-ssize_t blkdev_read(struct disk_device *dd, void *buf, size_t size, 
+ssize_t 
+simple_blkdev_read(struct disk_device *dd, void *buf, size_t size, 
     uint32_t offset) {
+    struct block_device *bdev = dd->bdev;
     char *dst = (char *)buf;
     struct bh_desc *bh;
     size_t remain = size;
@@ -292,7 +360,7 @@ ssize_t blkdev_read(struct disk_device *dd, void *buf, size_t size,
     blkofs = offset % dd->blk_size;
 
     while (remain > 0) {
-        err = bh_read(dd, blkno, &bh);
+        err = bh_read(bdev, blkno, &bh);
         if (err)
             return err;
         bytes = dd->blk_size - blkofs;
@@ -300,7 +368,7 @@ ssize_t blkdev_read(struct disk_device *dd, void *buf, size_t size,
             bytes = remain;
 
         memcpy(dst, bh->buffer + blkofs, bytes);
-        bh_release(bh);
+        bh_release(bdev, bh);
         dst += bytes;
         remain -= bytes;
         blkofs = 0;
@@ -310,63 +378,38 @@ ssize_t blkdev_read(struct disk_device *dd, void *buf, size_t size,
     return size - remain;
 }
 
-int blkdev_init(void) {
-    int err;
-    if (!bh_initialized) {
-        struct bh_desc *bh;
-        size_t size;
-
-        size = CONFIG_BLKDEV_MAX_BLKSZ + sizeof(struct bh_desc);
-        bh = general_malloc(size * NR_BLKS);
-        assert(bh != NULL);
-        bh_buffer = bh;
-        for (int i = 0; i < (int)NR_BLKS; i++) {
-            bh->blkno = 0;
-            bh->buffer = (char *)(bh + 1);
-            bh->state = BH_STATE_INVALD;
-            bh->dd = NULL;
-            rte_list_add(&bh->link, &cached_list);
-            bh = (void *)((char *)bh + size);
-        }
-
-        err = os_timer_create(&bh_timer, bh_check_cb, NULL, false);
+int 
+simple_blkdev_init(struct disk_device *dd) {
+    if (!bh_timer) {
+        int err = os_timer_create(&bh_timer, bh_check_cb, NULL, false);
         if (err) {
-            general_free(bh);
-            bh_buffer = NULL;
             pr_err("create timer failed(%d)\n", err);
             return err;
         }
-        MTX_LOCK_INIT();
-        bh_initialized = true;
-        err = os_timer_add(bh_timer, CONFIG_BLKDEV_SWAP_PERIOD);
+        os_mtx_init(&bdev_mutex, 0);
+        err = os_timer_add(bh_timer, CONFIG_BLKDEV_SWAP_PERIOD*10);
         assert(err == 0);
         (void) err;
     }
-    return 0;
+
+    return bdev_init(dd, CONFIG_BLKDEV_NR_BUFS);
 }
 
-int blkdev_destroy(void) {
-    if (!bh_initialized)
-        return 0;
-    MTX_LOCK();
-    os_timer_destroy(bh_timer);
-    RTE_INIT_LIST(&cached_list);
-    RTE_INIT_LIST(&dirty_list);
-    if (bh_buffer) {
-        general_free(bh_buffer);
-        bh_buffer = NULL;
+void 
+simple_blkdev_print(void) {
+    struct rte_list *pos;
+    os_mtx_lock(&bdev_mutex);
+    rte_list_foreach(pos, &created_list) {
+        struct block_device *bdev = rte_container_of(pos, 
+            struct block_device, link);
+        struct bh_statitics *stat = &bdev->stat;
+        pr_out("\n=========== %s Statistics ==========\n", 
+            disk_device_get_name(bdev->dd));
+        pr_out("Cache Hits: %ld\nCache Missed: %ld\nCache Hit-Rate: %ld%%\n\n",
+            stat->cache_hits,
+            stat->cache_missed,
+            (stat->cache_hits * 100) / (stat->cache_hits + stat->cache_missed)
+        );
     }
-    bh_initialized = false;
-    MTX_UNLOCK();
-    return 0;
-}
-
-void blkdev_print(void) {
-    struct bh_statitics *stat = &bh_statistics;
-    pr_out("\n=========== Block Device Statistics ==========\n");
-    pr_out("Cache Hits: %ld\nCache Missed: %ld\nCache Hit-Rate: %ld%%\n\n",
-        stat->cache_hits,
-        stat->cache_missed,
-        (stat->cache_hits * 100) / (stat->cache_hits + stat->cache_missed)
-    );
+    os_mtx_unlock(&bdev_mutex);
 }
