@@ -13,6 +13,11 @@ typedef void (*os_thread_entry_t)(void *);
 #include "basework/os/osapi_timer.h"
 #include "basework/os/osapi_fs.h"
 
+#if defined(__GUNC__) || defined(__clang__)
+#define __has_scoped_guard 1
+#include "basework/cleanup.h"
+#endif
+
 #ifdef __cplusplus
 extern "C"{
 #endif
@@ -169,6 +174,10 @@ OS_MTX_API int _os_mtx_timedlock(os_mutex_t *mtx, uint32_t timeout);
 #define os_mtx_trylock(mtx) \
     _os_mtx_trylock(mtx)
 OS_MTX_API int _os_mtx_trylock(os_mutex_t *mtx);
+#endif
+
+#ifdef __has_scoped_guard
+DEFINE_GUARD(mutex, os_mutex_t *, os_mtx_lock(_T), os_mtx_unlock(_T))
 #endif
 
 /*
