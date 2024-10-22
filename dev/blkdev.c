@@ -125,7 +125,6 @@ blkdev_sync_locked(struct block_device *bdev, long expired,
 
         rte_list_del(&bh->link);
         if (rte_unlikely(invalid)) {
-            bh->dd = NULL;
             bh->state = BH_STATE_INVALD;
         } else {
             bh->state = BH_STATE_CACHED;
