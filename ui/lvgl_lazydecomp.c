@@ -36,6 +36,8 @@
 
 #define ALIGNED_UP_ADD(p, size, align) \
 	(char *)(((uintptr_t)p + size + align - 1) & ~(align - 1))
+#define ALIGNED_UP(v, a) (((v) + ((a) - 1)) & ~((a) - 1))
+
 
 struct image_node {
 	uint32_t         key;	 /* Picture offset address */
@@ -130,6 +132,8 @@ STATIC_INLINE void *alloc_cache_buffer(struct lazy_cache *cache, size_t size,
 	struct cache_mempool *pool = &cache->main_mempool;
 	void *p;
 
+	size = ALIGNED_UP(size, CACHE_ALIGNED);
+	
 	if (pool->end - pool->freeptr >= size) {
 		*phead = (void **)&pool->freeptr;
 		p = pool->freeptr;
