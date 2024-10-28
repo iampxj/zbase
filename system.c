@@ -99,36 +99,21 @@ int sys_firmware_evaluate(void) {
     /* starting the recovery timer */
     os_timer_mod(crash_timer, MILLISECONDS(CRASH_TIMEOUT));
     
-    return nvram->crash.state;
+	if (nvram->crash.count == 2)
+		return CRASH_STATE_RECOVER;
+	
+	if (nvram->crash.count >= 4)
+		return CRASH_STATE_FATAL;
+	
+	return CRASH_STATE_NORMAL;
 }
 
 void sys_crash_up(void) {
-    struct nvram_desc *nvram = sys_nvram_get();
+     struct nvram_desc *nvram = sys_nvram_get();
     os_critical_declare
 
     os_critical_lock
-    switch (nvram->crash.state) {
-    case CRASH_STATE_NORMAL:
-        pr_notice("CRASH_STATE_NORMAL\n");
-        if (nvram->crash.count == SYS_RECOVERY_THRESHOLD) {
-            nvram->crash.state = CRASH_STATE_RECOVER;
-            pr_notice("CRASH_STATE_RECOVER\n");
-        }
-        nvram->crash.count++;
-        break;
-    case CRASH_STATE_RECOVER:
-        nvram->crash.state = CRASH_STATE_RECOVER_POST;
-        pr_notice("CRASH_STATE_RECOVER_POST\n");
-        break;
-    case CRASH_STATE_RECOVER_POST:
-        nvram->crash.state = CRASH_STATE_FATAL;
-        nvram->crash.count++;
-        pr_notice("CRASH_STATE_FATAL\n");
-        break;
-    default:
-        nvram->crash.count++;
-        break;
-    }
+	nvram->crash.count++;
     os_critical_unlock
 }
 

@@ -73,13 +73,13 @@ void gpt_destroy(void) {
 
 void gpt_dump(void) {
     struct gp_table *gpt = gp_table;
+    if (gpt == NULL)
+        return;
+
     const char *devname = "device";
     const char *name = "name";
     size_t pname_max = strlen(name);
     size_t dname_max = strlen(devname);
-
-    if (gpt == NULL)
-        return;
 
     for (size_t i = 0; i < gpt->count; i++) {
         if (strlen(gpt->gps[i].name) > pname_max)
@@ -125,6 +125,9 @@ int gpt_load(const char *buffer) {
     cJSON *obj;
     int count;
     int err = 0;
+
+    if (buffer == NULL)
+        return -EINVAL;
 
     cJSON_Init();
     
@@ -289,10 +292,7 @@ int gpt_signature(
     if (signature == NULL)
         return -EINVAL;
 
-    if (gpt == NULL)
-        return -EINVAL;
-
-    if (gpt->count == 0)
+    if (!gpt || !gpt->count)
         return -EINVAL;
 
     return signature(gp_table, 
