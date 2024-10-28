@@ -137,7 +137,7 @@ STATIC_INLINE void *alloc_cache_buffer(struct lazy_cache *cache, size_t size,
 	if (pool->end - pool->freeptr >= size) {
 		*phead = (void **)&pool->freeptr;
 		p = pool->freeptr;
-		pool->freeptr = ALIGNED_UP_ADD(p, size, CACHE_ALIGNED);
+		pool->freeptr = ALIGNED_UP_ADD(p, size, 1);
 		return p;
 	}
 
@@ -148,7 +148,7 @@ STATIC_INLINE void *alloc_cache_buffer(struct lazy_cache *cache, size_t size,
 		if ((long)(pool->end - pool->freeptr) >= size) {
 			void *ptr = pool->freeptr;
 			*phead = (void **)&pool->freeptr;
-			pool->freeptr = ALIGNED_UP_ADD(ptr, size, 64);
+			pool->freeptr = ALIGNED_UP_ADD(ptr, size, 1);
 			return ptr;
 		}
 
