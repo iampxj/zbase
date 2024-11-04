@@ -39,10 +39,10 @@ struct screen_context {
     uint32_t on_timestamp;
     uint16_t brightness;
     uint16_t midsuper_pending : 1;
-    uint16_t midsuper_sleep : 1;
     uint16_t post_active : 1;
     uint16_t initialized : 1;
     struct screen_eventsrc source;
+    uint8_t sc_state;
     bool disabled;
 };
 
@@ -57,7 +57,10 @@ do {\
 } while (0)
 
 #define SCREEN_STATE_SET(_sc, _sta) \
-    (_sc)->sm_ops->screen_set(&(_sc)->source, _sta, (uint8_t)(_sc)->brightness)
+({ \
+    (_sc)->sc_state = (_sta); \
+    (_sc)->sm_ops->screen_set(&(_sc)->source, _sta, (uint8_t)(_sc)->brightness); \
+})
 
 #define MTX_INIT()    os_mtx_init(&sc->lock, 0)
 #define MTX_LOCK()    os_mtx_lock(&sc->lock) 
@@ -123,10 +126,10 @@ static void screen_on_timeout_mid(os_timer_t timer, void *arg) {
     MTX_LOCK();
     if (rte_unlikely(sc->disabled))
         goto _unlock;
+
     sc->source.deactive_src = SCREEN_EVSRC_TIMER;
     err = SCREEN_STATE_SET(sc, SCREEN_STATE_MIDDLE);
     if (!err) {
-        sc->midsuper_sleep = true;
         os_timer_update_handler(sc->timer, screen_on_timeout_mid2, sc);
         os_timer_mod(sc->timer, MILLI_SEC(sc->sleep_delay));
     } else {
@@ -146,6 +149,7 @@ static void screen_on_timeout(os_timer_t timer, void *arg) {
     MTX_LOCK();
     if (rte_unlikely(sc->disabled))
         goto _unlock;
+
     sc->source.deactive_src = SCREEN_EVSRC_TIMER;
     err = SCREEN_STATE_SET(sc, SCREEN_STATE_SLEEP);
     if (!err)
@@ -226,7 +230,6 @@ static void screen_timer_reset(struct screen_context *sc,
 
 static int midsuper_state_active(struct screen_context *sc, int sec) {
     (void) sec;
-    sc->midsuper_sleep = false;
     SCREEN_STATE_SET(sc, SCREEN_STATE_NORMAL);
     screen_timer_reset(sc, screen_on_timeout_mid, MILLI_SEC(sc->on_delay));
     pr_dbg("screen on {supper -> supper}\n");
@@ -235,7 +238,6 @@ static int midsuper_state_active(struct screen_context *sc, int sec) {
 
 static int midsuper_state_deactive(struct screen_context *sc) {
     (void) sc;
-    sc->midsuper_sleep = true;
     SCREEN_STATE_SET(sc, SCREEN_STATE_MIDDLE);
     screen_timer_reset(sc, screen_on_timeout_mid2, MILLI_SEC(sc->sleep_delay));
     pr_dbg("screen off {supper -> supper}\n");
@@ -257,19 +259,27 @@ bool is_screen_active(void) {
     struct screen_context *sc = &screen_context;
     return sc->state == &normal_state ||
             sc->state == &super_state || 
-            (sc->state == &midsuper_state && !sc->midsuper_sleep);
+            (sc->state == &midsuper_state && 
+            sc->sc_state != SCREEN_STATE_MIDDLE);
 }
 
 bool is_screen_sleep(void) {
     struct screen_context *sc = &screen_context;
     return sc->state == &sleep_state ||
-        (sc->state == &midsuper_state && sc->midsuper_sleep);
+        (sc->state == &midsuper_state && 
+        sc->sc_state == SCREEN_STATE_MIDDLE);
 }
 
 bool is_screen_faded(void) {
     struct screen_context *sc = &screen_context;
     return sc->state == &midsuper_state && 
-        sc->midsuper_sleep;
+        sc->sc_state == SCREEN_STATE_MIDDLE;
+}
+
+bool is_screen_off(void) {
+    struct screen_context *sc = &screen_context;
+    return sc->sc_state == SCREEN_STATE_SLEEP ||
+        sc->sc_state == SCREEN_STATE_MIDDLE;
 }
 
 int __screen_active(unsigned int sec, unsigned int source) {
@@ -279,6 +289,7 @@ int __screen_active(unsigned int sec, unsigned int source) {
     MTX_LOCK();
     if (rte_unlikely(sc->disabled))
         goto _unlock;
+        
     delay = sec? sec: sc->on_delay;
     sc->source.active_src = (uint8_t)source;
     err = sc->state->active(sc, delay);
@@ -390,7 +401,6 @@ int screen_midsuper_exit(void) {
 
 uint32_t screen_get_activetime(void) {
     struct screen_context *sc = &screen_context;
-    
     return (uint32_t)((long)sys_uptime_get() - (long)sc->on_timestamp);
 }
 

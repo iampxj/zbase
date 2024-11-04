@@ -13,7 +13,7 @@ typedef void (*os_thread_entry_t)(void *);
 #include "basework/os/osapi_timer.h"
 #include "basework/os/osapi_fs.h"
 
-#if defined(__GUNC__) || defined(__clang__)
+#if defined(__GNUC__) || defined(__clang__)
 #define __has_scoped_guard 1
 #include "basework/cleanup.h"
 #endif

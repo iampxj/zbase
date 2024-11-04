@@ -315,7 +315,7 @@ static uint32_t file_checksum(struct ptfs_class *ctx) {
 int pt_file_open(struct ptfs_class *ctx, struct pt_file *filp,
     const char *name, int mode) {
     struct file_metadata *pmeta;
-    int err = 0;
+    int rw, err = 0;
     int fidx;
 
     MTX_LOCK(ctx->mtx);
@@ -343,16 +343,22 @@ int pt_file_open(struct ptfs_class *ctx, struct pt_file *filp,
         memset(pmeta, 0, sizeof(*filp->pmeta));
         pmeta->i_meta = fidx;
         strncpy(pmeta->name, name, MAX_PTFS_FILENAME-1);
+        filp->rawofs = 0;
     } else {
-        if ((mode & VFS_O_MASK) == VFS_O_WRONLY) {
-            if (!(mode & VFS_O_APPEND))
+        rw = mode & VFS_O_MASK;
+        if (rw == VFS_O_WRONLY || rw == VFS_O_RDWR) {
+            if (mode & VFS_O_TRUNC)
                 file_metadata_reset_locked(ctx, pmeta);
-            else
+            else if (rw == VFS_O_WRONLY && !(mode & VFS_O_APPEND))
+                file_metadata_reset_locked(ctx, pmeta);
+            else if (mode & VFS_O_APPEND)
                 filp->rawofs = pmeta->size;
-        }
+            else
+                filp->rawofs = 0;
+        } else
+            filp->rawofs = 0;
     }
 
-    filp->rawofs = 0;
     filp->pmeta = pmeta;
     filp->oflags = mode & VFS_O_MASK;
     filp->oflags |= PFLILE_O_FLAGS;

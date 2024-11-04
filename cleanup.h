@@ -61,7 +61,7 @@
 #define DEFINE_FREE(_name, _type, _free) \
 	static inline void __free_##_name(void *p) { _type _T = *(_type *)p; _free; }
 
-#define __free(_name)	__cleanup(__free_##_name)
+#define __free(_name)	__rte_cleanup(__free_##_name)
 
 #define __get_and_null_ptr(p) \
 	({ __auto_type __ptr = &(p); \
@@ -116,7 +116,7 @@ static inline class_##_name##_t class_##_name##ext##_constructor(_init_args) \
 { class_##_name##_t t = _init; return t; }
 
 #define CLASS(_name, var)						\
-	class_##_name##_t var __cleanup(class_##_name##_destructor) =	\
+	class_##_name##_t var __rte_cleanup(class_##_name##_destructor) =	\
 		class_##_name##_constructor
 
 
@@ -139,7 +139,7 @@ static inline class_##_name##_t class_##_name##ext##_constructor(_init_args) \
 	DEFINE_CLASS(_name, _type, _unlock, ({ _lock; _T; }), _type _T)
 
 #define guard(_name) \
-	CLASS(_name, __UNIQUE_ID(guard))
+	CLASS(_name, __RTE_UNIQUE_ID(guard))
 
 #define scoped_guard(_name, args...)					\
 	for (CLASS(_name, scope)(args),					\

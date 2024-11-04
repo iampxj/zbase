@@ -59,6 +59,7 @@ struct dirent;
 
 #define VFS_O_CREAT    0x0200
 #define VFS_O_APPEND   0x0008
+#define VFS_O_TRUNC    0x0010
 #define VFS_O_FIFO     0x00100000
 #define VFS_O_NONBLOCK 0x00000800
 

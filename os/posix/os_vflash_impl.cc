@@ -10,7 +10,7 @@
 #include "basework/ccinit.h"
 
 #define FLASH_DEVNAME "virtual-flash"
-#define FLASH_PGSZ 4096
+#define FLASH_PGSZ 256
 #define FLASH_CAPACITY (5 *1024 * 1024)
 
 #ifdef CONFIG_BCACHE

@@ -1,6 +1,6 @@
 if (CONFIG_SCREEN_MANAGER)
 target_sources(basework
     PRIVATE
-    screen_manager.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/screen_manager.c
 )
 endif()

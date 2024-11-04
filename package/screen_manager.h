@@ -95,6 +95,13 @@ bool is_screen_sleep(void);
 bool is_screen_faded(void);
 
 /*
+ * is_screen_off - Whether the screen state is off
+ *
+ * return true if it is off state
+ */
+bool is_screen_off(void);
+
+/*
  * screen_active - Active screen display
  *
  * @sec: screen on timeout in seconds
