@@ -71,7 +71,7 @@ rte_ring_enqueue_bulk_elem_start(struct rte_ring *r, unsigned int n,
 		unsigned int *free_space)
 {
 	return __rte_ring_do_enqueue_start(r, n, RTE_RING_QUEUE_FIXED,
-			free_space);
+			(uint32_t *)free_space);
 }
 
 /**
@@ -120,7 +120,7 @@ rte_ring_enqueue_burst_elem_start(struct rte_ring *r, unsigned int n,
 		unsigned int *free_space)
 {
 	return __rte_ring_do_enqueue_start(r, n, RTE_RING_QUEUE_VARIABLE,
-			free_space);
+			(uint32_t *)free_space);
 }
 
 /**
@@ -235,7 +235,7 @@ rte_ring_dequeue_bulk_elem_start(struct rte_ring *r, void *obj_table,
 		unsigned int esize, unsigned int n, unsigned int *available)
 {
 	return __rte_ring_do_dequeue_start(r, obj_table, esize, n,
-			RTE_RING_QUEUE_FIXED, available);
+			RTE_RING_QUEUE_FIXED, (uint32_t *)available);
 }
 
 /**
@@ -289,7 +289,7 @@ rte_ring_dequeue_burst_elem_start(struct rte_ring *r, void *obj_table,
 		unsigned int esize, unsigned int n, unsigned int *available)
 {
 	return __rte_ring_do_dequeue_start(r, obj_table, esize, n,
-			RTE_RING_QUEUE_VARIABLE, available);
+			RTE_RING_QUEUE_VARIABLE, (uint32_t *)available);
 }
 
 /**

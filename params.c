@@ -219,10 +219,10 @@ void param_context_dump(struct param_context *ctx) {
     os_mtx_lock(&ctx->mtx);
     pr_out("domain(%s):\n", ctx->name);
     TAILQ_FOREACH(p, &ctx->head, link) {
-        if (isprint(p->val[0]) && 
-            isprint(p->val[1]) &&
-            isprint(p->val[2]) &&
-            isprint(p->val[3])) {
+        if (isprint((int)p->val[0]) && 
+            isprint((int)p->val[1]) &&
+            isprint((int)p->val[2]) &&
+            isprint((int)p->val[3])) {
             pr_out("\t%s: %s\n", p->name, p->val);
         } else {
             pr_out("\t%s: %d\n", p->name, *(int *)p->val);

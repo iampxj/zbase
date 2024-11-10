@@ -69,10 +69,6 @@ add_subdirectory_ifdef(CONFIG_BASEWORK_TEST tests)
 
 if (NOT CONFIG_BOOTLOADER)
 if (NOT WINDOWS)
-	add_subdirectory(drive)
-endif()
-
-if (NOT WINDOWS)
     add_subdirectory(debug)
     if (NOT LINUX)
         add_subdirectory_ifdef(CONFIG_BASEWORK_UI ui)
