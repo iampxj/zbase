@@ -3,8 +3,8 @@
  *
  * RTOS abstract layer
  */
-#ifndef BASEWORK_OS_ZEPHYR_OS_BASE_H_
-#define BASEWORK_OS_ZEPHYR_OS_BASE_H_
+#ifndef BASEWORK_OS_THREADX_OS_BASE_H_
+#define BASEWORK_OS_THREADX_OS_BASE_H_
 
 #include <stdint.h>
 #include <assert.h>
@@ -12,13 +12,13 @@
 
 #include "tx_user.h"
 #include "tx_api.h"
-#include "tx_semaphore.h"
-
 #include "basework/compiler_attributes.h"
 
 #ifdef __cplusplus
 extern "C"{
 #endif
+
+#define TX_CALLERR(fn, arg...) 0 - (int)fn(arg) 
 
 #define os_in_isr()
 #define os_panic(...)
@@ -37,7 +37,7 @@ typedef TX_SEMAPHORE os_completion_t;
     do { \
         TX_MEMSET((_cp), 0, (sizeof(TX_SEMAPHORE))); \
         (_cp)->tx_semaphore_name = (CHAR *)__func__; \
-        (_cp)->tx_semaphore_id = TX_SEMAPHORE_ID; \
+        (_cp)->tx_semaphore_id = 0x53454D41; \
     } while (0)
 #define os_completion_wait(_cp)    tx_semaphore_get((_cp), TX_WAIT_FOREVER)
 #define os_completed(_cp)          tx_semaphore_ceiling_put((_cp), 1)
@@ -53,6 +53,7 @@ typedef TX_SEMAPHORE os_completion_t;
 #define OS_MTX_API    static __rte_always_inline
 #define OS_CV_API     static __rte_always_inline
 #define OS_SEM_API    static __rte_always_inline
+#define OS_EVENT_API  static __rte_always_inline
 
 typedef void* cpu_set_t;
 typedef struct {
@@ -73,24 +74,37 @@ typedef struct {
     TX_SEMAPHORE sem;
 } os_sem_t;
 
+typedef struct {
+    TX_EVENT_FLAGS_GROUP event;
+} os_event_t;
+
 OS_THREAD_API int 
 _os_thread_spawn(os_thread_t *thread, const char *name, 
     void *stack, size_t size, 
     int prio, os_thread_entry_t entry, void *arg) {
-    return 0 - (int)tx_thread_create(&thread->thread, (CHAR *)name, (VOID (*)(ULONG))(void *)entry, 
+    return TX_CALLERR(tx_thread_create, &thread->thread, (CHAR *)name, (VOID (*)(ULONG))(void *)entry, 
         (ULONG)arg, stack, size, prio, prio, TX_NO_TIME_SLICE, TX_TRUE);         
 }
 
 OS_THREAD_API int 
 _os_thread_destroy(os_thread_t *thread) {
-    return 0 - (int)tx_thread_delete(&thread->thread);
+    return TX_CALLERR(tx_thread_delete, &thread->thread);
 }
 
 OS_THREAD_API int 
 _os_thread_change_prio(os_thread_t *thread, int newprio, 
     int *oldprio) {
-    return 0 - (int)tx_thread_priority_change(&thread->thread, (UINT)newprio, 
+    return TX_CALLERR(tx_thread_priority_change, &thread->thread, (UINT)newprio, 
         (UINT *)oldprio);
+}
+
+#define os_thread_preemption_change(t, n, o) \
+    _os_thread_preemption_change(t, n, o)
+OS_THREAD_API int 
+_os_thread_preemption_change(os_thread_t *thread, int new_threshold, 
+    int *old_threshold) {
+    return TX_CALLERR(tx_thread_preemption_change, &thread->thread, (UINT)new_threshold, 
+        (UINT *)old_threshold);
 }
 
 OS_THREAD_API int 
@@ -107,7 +121,7 @@ _os_thread_getaffinity(os_thread_t *thread, size_t cpusetsize,
 
 OS_THREAD_API int 
 _os_thread_sleep(uint32_t ms) {
-    return 0 - (int)_tx_thread_sleep(TX_MSEC(ms));
+    return TX_CALLERR(_tx_thread_sleep, TX_MSEC(ms));
 }
 
 OS_THREAD_API void 
@@ -123,37 +137,38 @@ _os_thread_self(void) {
 OS_MTX_API int 
 _os_mtx_init(os_mutex_t *mtx, int type) {
     (void) type;
-    return 0 - (int)tx_mutex_create(&mtx->mtx, "mutex", TX_INHERIT);
+    return TX_CALLERR(tx_mutex_create, &mtx->mtx, "mutex", TX_INHERIT);
 }
 
 OS_MTX_API int 
 _os_mtx_destroy(os_mutex_t *mtx) {
-    return 0 - (int)tx_mutex_delete(&mtx->mtx);
+    return TX_CALLERR(tx_mutex_delete, &mtx->mtx);
 }
 
 OS_MTX_API int 
 _os_mtx_lock(os_mutex_t *mtx) {
-    return 0 - (int)tx_mutex_get(&mtx->mtx, TX_WAIT_FOREVER);
+    return TX_CALLERR(tx_mutex_get, &mtx->mtx, TX_WAIT_FOREVER);
 }
 
 OS_MTX_API int 
 _os_mtx_unlock(os_mutex_t *mtx) {
-    return 0 - (int)tx_mutex_put(&mtx->mtx);
+    return TX_CALLERR(tx_mutex_put, &mtx->mtx);
 }
 
 OS_MTX_API int 
 _os_mtx_timedlock(os_mutex_t *mtx, uint32_t timeout) {
-    return 0 - (int)tx_mutex_get(&mtx->mtx, timeout);
+    return TX_CALLERR(tx_mutex_get, &mtx->mtx, timeout);
 }
 
 OS_MTX_API int 
 _os_mtx_trylock(os_mutex_t *mtx) {
-    return 0 - (int)tx_mutex_get(&mtx->mtx, TX_NO_WAIT);
+    return TX_CALLERR(tx_mutex_get, &mtx->mtx, TX_NO_WAIT);
 }
 
 OS_CV_API int _os_cv_init(os_cond_t *cv, void *data) {
+    (void)data;
     cv->in_use = TX_TRUE;
-    return 0 - (int)tx_semaphore_create(&cv->cond_semaphore, "csem", 0);
+    return TX_CALLERR(tx_semaphore_create, &cv->cond_semaphore, "csem", 0);
 }
 
 OS_CV_API int _os_cv_signal(os_cond_t* cv) {
@@ -236,30 +251,30 @@ OS_CV_API int _os_cv_wait(os_cond_t *cv, os_mutex_t *mtx) {
 #define OS_SEMAPHORE_IMLEMENT
 OS_SEM_API int 
 _os_sem_init(os_sem_t *sem, unsigned int value) {
-    return 0 - (int)tx_semaphore_create(&sem->sem, "sem", value);
+    return TX_CALLERR(tx_semaphore_create, &sem->sem, "sem", value);
 }
 
 OS_SEM_API int 
 _os_sem_timedwait(os_sem_t *sem, int64_t timeout) {
-    return 0 - (int)tx_semaphore_get(&sem->sem, (ULONG)timeout);
+    return TX_CALLERR(tx_semaphore_get, &sem->sem, (ULONG)timeout);
 }
 
 OS_SEM_API int 
 _os_sem_wait(os_sem_t *sem) {
-    return 0 - (int)tx_semaphore_get(&sem->sem, TX_WAIT_FOREVER);
+    return TX_CALLERR(tx_semaphore_get, &sem->sem, TX_WAIT_FOREVER);
 }
 
 OS_SEM_API int 
 _os_sem_trywait(os_sem_t *sem) {
-    return 0 - (int)tx_semaphore_get(&sem->sem, TX_NO_WAIT);
+    return TX_CALLERR(tx_semaphore_get, &sem->sem, TX_NO_WAIT);
 }
 
 OS_SEM_API int 
 _os_sem_post(os_sem_t *sem) {
-    return 0 - (int)tx_semaphore_put(&sem->sem);
+    return TX_CALLERR(tx_semaphore_put, &sem->sem);
 }
 
 #ifdef __cplusplus
 }
 #endif
-#endif /* BASEWORK_OS_ZEPHYR_OS_BASE_H_ */
+#endif /* BASEWORK_OS_THREADX_OS_BASE_H_ */

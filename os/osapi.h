@@ -99,6 +99,11 @@ OS_THREAD_API int _os_thread_change_prio(os_thread_t *thread, int newprio,
     int *oldprio);
 #endif
 
+#ifndef os_thread_preemption_change
+#define os_thread_preemption_change(thr, new_threshold, old_threshold) \
+    os_thread_change_prio(thr, new_threshold, old_threshold)
+#endif /* os_thread_preemption_change */
+
 #ifndef os_thread_setaffinity
 #define os_thread_setaffinity(thr, cpusetsize, cpuset) \
     _os_thread_setaffinity(thr, cpusetsize, cpuset)
