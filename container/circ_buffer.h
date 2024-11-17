@@ -31,6 +31,7 @@ extern "C" {
 struct circ_buffer {
 	void *base;	   /* The pointer to buffer space */
 	size_t size;   /* The size of buffer space */
+	size_t mask;   /* The mask of size */
 	size_t head;   /* The head of buffer space */
 	size_t tail;   /* The tail of buffer space */
 	bool external; /* The flag for external buffer */

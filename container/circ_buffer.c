@@ -38,7 +38,10 @@
 int circbuf_init(struct circ_buffer *circ, void *base, 
     size_t bytes) {
 	_ASSERT(circ);
-	_ASSERT(!base || bytes);
+	_ASSERT(bytes);
+
+	if (bytes & (bytes - 1))
+		return -EINVAL;
 
 	circ->external = !!base;
 	if (!base && bytes) {
@@ -49,6 +52,7 @@ int circbuf_init(struct circ_buffer *circ, void *base,
 
 	circ->base = base;
 	circ->size = bytes;
+	circ->mask = circ->size - 1;
 	circ->head = 0;
 	circ->tail = 0;
 	return 0;
@@ -130,14 +134,12 @@ ssize_t circbuf_peekat(struct circ_buffer *circ, size_t pos, void *dst,
 	size_t off;
 
 	_ASSERT(circ);
-	if (!circ->size)
-		return 0;
 
 	if (circ->head - pos > circ->head - circ->tail)
 		pos = circ->tail;
 
 	len = circ->head - pos;
-	off = pos % circ->size;
+	off = pos & circ->mask;
 	if (bytes > len)
 		bytes = len;
 
@@ -183,11 +185,8 @@ ssize_t circbuf_write(struct circ_buffer *circ, const void *src,
 	_ASSERT(circ);
 	_ASSERT(src || !bytes);
 
-	if (!circ->size)
-		return 0;
-
 	space = circbuf_space(circ);
-	off = circ->head % circ->size;
+	off = circ->head & circ->mask;
 	if (bytes > space)
 		bytes = space;
 
@@ -210,8 +209,6 @@ ssize_t circbuf_overwrite(struct circ_buffer *circ, const void *src,
 
 	_ASSERT(circ);
 	_ASSERT(src || !bytes);
-	if (!circ->size)
-		return 0;
 
 	if (bytes > circ->size) {
 		skip = bytes - circ->size;
@@ -225,7 +222,7 @@ ssize_t circbuf_overwrite(struct circ_buffer *circ, const void *src,
 	}
 
 	circ->head += skip;
-	off = circ->head % circ->size;
+	off = circ->head & circ->mask;
 	space = circ->size - off;
 	if (bytes < space) {
 		space = bytes;
@@ -243,8 +240,8 @@ void *circbuf_get_writeptr(struct circ_buffer *circ, size_t *size) {
 	size_t pos;
 
 	_ASSERT(circ);
-	off = circ->head % circ->size;
-	pos = circ->tail % circ->size;
+	off = circ->head & circ->mask;
+	pos = circ->tail & circ->mask;
 	if (off >= pos) {
 		*size = circ->size - off;
 	} else {
@@ -259,8 +256,8 @@ void *circbuf_get_readptr(struct circ_buffer *circ, size_t *size) {
 	size_t pos;
 
 	_ASSERT(circ);
-	off = circ->head % circ->size;
-	pos = circ->tail % circ->size;
+	off = circ->head & circ->mask;
+	pos = circ->tail & circ->mask;
 	if (pos > off) {
 		*size = circ->size - pos;
 	} else {

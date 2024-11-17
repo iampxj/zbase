@@ -188,7 +188,7 @@ static inline class_##_name##_t class_##_name##_constructor(_type *l)	\
 static inline class_##_name##_t class_##_name##_constructor(void)	\
 {									\
 	class_##_name##_t _t = { .lock = (void*)1 },			\
-			 *_T __maybe_unused = &_t;			\
+			 *_T __rte_maybe_unused = &_t;			\
 	_lock;								\
 	return _t;							\
 }
