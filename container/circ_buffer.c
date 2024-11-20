@@ -88,11 +88,6 @@ int circbuf_resize(struct circ_buffer *circ, size_t bytes) {
 	return 0;
 }
 
-void circbuf_reset(struct circ_buffer *circ) {
-	_ASSERT(circ);
-	circ->head = circ->tail = 0;
-}
-
 void circbuf_uninit(struct circ_buffer *circ) {
 	_ASSERT(circ);
 
@@ -100,32 +95,6 @@ void circbuf_uninit(struct circ_buffer *circ) {
 		general_free(circ->base);
 
 	memset(circ, 0, sizeof(*circ));
-}
-
-size_t circbuf_size(struct circ_buffer *circ) {
-	_ASSERT(circ);
-	return circ->size;
-}
-
-size_t circbuf_used(struct circ_buffer *circ) {
-	_ASSERT(circ);
-	return circ->head - circ->tail;
-}
-
-size_t circbuf_space(struct circ_buffer *circ) {
-	return circbuf_size(circ) - circbuf_used(circ);
-}
-
-bool circbuf_is_init(struct circ_buffer *circ) {
-	return !!circ->base;
-}
-
-bool circbuf_is_empty(struct circ_buffer *circ) {
-	return !circbuf_used(circ);
-}
-
-bool circbuf_is_full(struct circ_buffer *circ) {
-	return !circbuf_space(circ);
 }
 
 ssize_t circbuf_peekat(struct circ_buffer *circ, size_t pos, void *dst, 
@@ -265,14 +234,4 @@ void *circbuf_get_readptr(struct circ_buffer *circ, size_t *size) {
 	}
 
 	return (char *)circ->base + pos;
-}
-
-void circbuf_writecommit(struct circ_buffer *circ, size_t writtensize) {
-	_ASSERT(circ);
-	circ->head += writtensize;
-}
-
-void circbuf_readcommit(struct circ_buffer *circ, size_t readsize) {
-	_ASSERT(circ);
-	circ->tail += readsize;
 }

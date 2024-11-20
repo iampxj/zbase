@@ -96,8 +96,9 @@ void circbuf_uninit(struct circ_buffer *circ);
  * Input Parameters:
  *   circ  - Address of the circular buffer to be used.
  ****************************************************************************/
-
-void circbuf_reset(struct circ_buffer *circ);
+static inline void circbuf_reset(struct circ_buffer *circ) {
+	circ->head = circ->tail = 0;
+}
 
 /****************************************************************************
  * Name: circbuf_is_init
@@ -108,44 +109,9 @@ void circbuf_reset(struct circ_buffer *circ);
  * Input Parameters:
  *   circ  - Address of the circular buffer to be used.
  ****************************************************************************/
-
-bool circbuf_is_init(struct circ_buffer *circ);
-
-/****************************************************************************
- * Name: circbuf_is_full
- *
- * Description:
- *   Return true if the circular buffer is full.
- *
- * Input Parameters:
- *   circ  - Address of the circular buffer to be used.
- ****************************************************************************/
-
-bool circbuf_is_full(struct circ_buffer *circ);
-
-/****************************************************************************
- * Name: circbuf_is_empty
- *
- * Description:
- *   Return true if the circular buffer is empty.
- *
- * Input Parameters:
- *   circ  - Address of the circular buffer to be used.
- ****************************************************************************/
-
-bool circbuf_is_empty(struct circ_buffer *circ);
-
-/****************************************************************************
- * Name: circbuf_size
- *
- * Description:
- *   Return size of the circular buffer.
- *
- * Input Parameters:
- *   circ  - Address of the circular buffer to be used.
- ****************************************************************************/
-
-size_t circbuf_size(struct circ_buffer *circ);
+static inline bool circbuf_is_init(struct circ_buffer *circ) {
+	return !!circ->base;
+}
 
 /****************************************************************************
  * Name: circbuf_used
@@ -156,8 +122,35 @@ size_t circbuf_size(struct circ_buffer *circ);
  * Input Parameters:
  *   circ  - Address of the circular buffer to be used.
  ****************************************************************************/
+static inline size_t circbuf_used(struct circ_buffer *circ) {
+	return circ->head - circ->tail;
+}
 
-size_t circbuf_used(struct circ_buffer *circ);
+/****************************************************************************
+ * Name: circbuf_is_empty
+ *
+ * Description:
+ *   Return true if the circular buffer is empty.
+ *
+ * Input Parameters:
+ *   circ  - Address of the circular buffer to be used.
+ ****************************************************************************/
+static inline bool circbuf_is_empty(struct circ_buffer *circ) {
+	return !circbuf_used(circ);
+}
+
+/****************************************************************************
+ * Name: circbuf_size
+ *
+ * Description:
+ *   Return size of the circular buffer.
+ *
+ * Input Parameters:
+ *   circ  - Address of the circular buffer to be used.
+ ****************************************************************************/
+static inline size_t circbuf_size(struct circ_buffer *circ) {
+	return circ->size;
+}
 
 /****************************************************************************
  * Name: circbuf_space
@@ -168,8 +161,22 @@ size_t circbuf_used(struct circ_buffer *circ);
  * Input Parameters:
  *   circ  - Address of the circular buffer to be used.
  ****************************************************************************/
+static inline size_t circbuf_space(struct circ_buffer *circ) {
+	return circbuf_size(circ) - circbuf_used(circ);
+}
 
-size_t circbuf_space(struct circ_buffer *circ);
+/****************************************************************************
+ * Name: circbuf_is_full
+ *
+ * Description:
+ *   Return true if the circular buffer is full.
+ *
+ * Input Parameters:
+ *   circ  - Address of the circular buffer to be used.
+ ****************************************************************************/
+static inline bool circbuf_is_full(struct circ_buffer *circ) {
+	return !circbuf_space(circ);
+}
 
 /****************************************************************************
  * Name: circbuf_peekat
@@ -352,8 +359,9 @@ void *circbuf_get_readptr(struct circ_buffer *circ, size_t *size);
  *   writtensize - The data that has been written to the buffer.
  *
  ****************************************************************************/
-
-void circbuf_writecommit(struct circ_buffer *circ, size_t writtensize);
+static inline void circbuf_writecommit(struct circ_buffer *circ, size_t writtensize) {
+	circ->head += writtensize;
+}
 
 /****************************************************************************
  * Name: circbuf_readcommit
@@ -368,8 +376,9 @@ void circbuf_writecommit(struct circ_buffer *circ, size_t writtensize);
  *   readsize - The data that has been read to the buffer.
  *
  ****************************************************************************/
-
-void circbuf_readcommit(struct circ_buffer *circ, size_t readsize);
+static inline void circbuf_readcommit(struct circ_buffer *circ, size_t readsize) {
+	circ->tail += readsize;
+}
 
 #ifdef __cplusplus
 }
