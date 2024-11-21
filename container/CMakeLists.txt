@@ -2,8 +2,6 @@ zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/observer.c
     ${CMAKE_CURRENT_SOURCE_DIR}/kfifo.c
     ${CMAKE_CURRENT_SOURCE_DIR}/ahash.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/circ_buffer.c
-
     ${CMAKE_CURRENT_SOURCE_DIR}/radix-tree.c
     ${CMAKE_CURRENT_SOURCE_DIR}/rbtree/rb_prepend.c
     ${CMAKE_CURRENT_SOURCE_DIR}/rbtree/rb_extract.c
