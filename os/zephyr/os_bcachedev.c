@@ -52,6 +52,9 @@ bdev_io_request(struct flash_context *ctx, struct bcache_request *r,
 				break;
 		}
 		break;
+	case BCACHE_DEV_REQ_SYNC:
+		flash_flush(ctx->dev);
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -65,6 +68,11 @@ bdev_driver_handler(struct bcache_device *dd, uint32_t req, void *argp) {
 	struct flash_context *ctx = bcache_disk_get_driver_data(dd);
 	if (rte_likely(req == BCACHE_IO_REQUEST))
 		return bdev_io_request(ctx, argp, dd->block_size);
+
+	if (req == BCACHE_IO_CAPABILITIES) {
+		*(uint32_t *)argp = BCACHE_DEV_CAP_SYNC;
+		return 0;
+	}
 
 	return bcache_ioctl(dd, req, argp);
 }
