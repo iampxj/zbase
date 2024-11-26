@@ -85,7 +85,6 @@ config MAX_MESSAGE_TYPES
 
 rsource "package/Kconfig"
 rsource "dev/Kconfig"
-rsource "drive/Kconfig"
 rsource "ui/Kconfig"
 rsource "lib/Kconfig"
 

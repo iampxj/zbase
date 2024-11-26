@@ -8,7 +8,7 @@
 #include CONFIG_HEADER_FILE
 #endif
 
-#define pr_fmt(fmt) "partition: " fmt
+#define pr_fmt(fmt) "<pt>: " fmt
 #define CONFIG_LOGLEVEL LOGLEVEL_INFO
 #include <errno.h>
 #include <assert.h>

@@ -27,6 +27,7 @@
 
 _Static_assert(RQ_HIGHEST_PRIORITY < CONFIG_BASEWORK_RQ_PRIORITY, "");
 
+WK_LOCK_DEFINE(run_queue, PARTIAL_WAKE_LOCK)
 static uint32_t old_timestamp __rte_section(".ram.noinit");
 static int rq_curr_priority __rte_section(".ram.noinit");
 

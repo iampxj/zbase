@@ -48,10 +48,16 @@ struct crcfile_node {
 	uint32_t crc;
 };
 
+struct copy_fnode {
+	struct file_node node;
+	char d_device[MAX_NAMELEN];
+	char s_device[MAX_NAMELEN];
+};
+
 #define PACKAGE_HEADER(type, n) \
 	struct type { \
 		struct file_header base; \
-		struct file_node   nodes[n]; \
+		struct copy_fnode  nodes[n]; \
 	}
 
 #ifdef __cplusplus

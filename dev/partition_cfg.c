@@ -6,7 +6,7 @@
 #include CONFIG_HEADER_FILE
 #endif
 
-#define pr_fmt(fmt) "partitons_cfg: "fmt
+#define pr_fmt(fmt) "<partiton>: "fmt
 #include <errno.h>
 
 #include "basework/dev/partition.h"
@@ -64,7 +64,8 @@ int partitions_configure_build(long base_addr, size_t size,
                 dp->offset = offset;
             if (!dp->parent)
                 dp->parent = phydev;
-			pr_notice("##%s: partition(%s) base(0x%x) size(0x%x)\n", 
+
+			pr_dbg("%s: partition(%s) base(0x%x) size(0x%x)\n", 
 				__func__, dp->name, dp->offset, dp->len);
             dp++;
             if (dp->name) {
@@ -98,15 +99,16 @@ int logic_partitions_create(const char *ppt, struct disk_partition *sublist) {
     uint32_t offset;
     uint32_t base_addr;
 
-    if (!ppt || !sublist)
+    if (!ppt || !sublist) {
+        pr_err("parameters error\n");
         return -EINVAL;
+    }
 
     parent = (struct disk_partition *)disk_partition_find(ppt);
-    if (!parent)
+    if (!parent) {
+        pr_err("Not found parition \"%s\"\n", ppt);
         return -ENODEV;
-    
-    if (parent->child)
-        return -EEXIST;
+    }
 
     base_addr = parent->offset;
     if (dp->offset == -1)
@@ -118,8 +120,9 @@ int logic_partitions_create(const char *ppt, struct disk_partition *sublist) {
             dp->offset = offset;
         dp->parent = parent->parent;
         offset += dp->len;
-        if (offset > base_addr + parent->len)
+        if (offset > base_addr + parent->len) {
             return -EINVAL;
+        }
         dp++;
     }
 

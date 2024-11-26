@@ -44,7 +44,6 @@ if (NOT CONFIG_BOOTLOADER)
 zephyr_library_sources(
     modmgr.c
 	system.c
-    params.c
     module.c
     idr.c
 )
@@ -68,10 +67,6 @@ add_subdirectory_ifndef(CONFIG_BOOTLOADER thirdparty)
 add_subdirectory_ifdef(CONFIG_BASEWORK_TEST tests)
 
 if (NOT CONFIG_BOOTLOADER)
-if (NOT WINDOWS)
-	add_subdirectory(drive)
-endif()
-
 if (NOT WINDOWS)
     add_subdirectory(debug)
     if (NOT LINUX)

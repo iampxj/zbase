@@ -36,6 +36,7 @@
 #include "basework/system.h"
 #include "basework/utils/binmerge.h"
 #include "basework/lib/crc.h"
+#include "basework/lib/libenv.h"
 
 #include "board_cfg.h"
 
@@ -44,7 +45,7 @@
  * Partition layout
  *
  * ---------------------------------------------------------------------------------------------------
- *| FIRMWARE(4) | SDFS(5) | NVRAM_RO(6) | NVRAM_RW(7) | SDFS_K(20) | GPT(30) | BOOTPARAM(31) | GP(36) |
+ *| FIRMWARE(4) | SDFS(5) | NVRAM_RO(6) | NVRAM_RW(7) | SDFS_K(20) | GPT(30) | BOOTPARAM(31) | GP(42) |
  * ---------------------------------------------------------------------------------------------------
  */
 
@@ -86,6 +87,8 @@ struct mdump_arg {
     size_t offset;
     int count;
 };
+
+extern int fw_load_pararm(const char *buffer);
 
 static struct mb_tracer *_g_mtracer;
 static size_t gmem_usage;
@@ -303,6 +306,38 @@ void *__general_realloc_debug(void *ptr, size_t size, const char *func, int line
 
 
 /*
+ * Environment variables heap
+ */
+static char env_buffer[8192] __rte_aligned(8);
+static STRUCT_SECTION_ITERABLE(k_heap, env_heap) = {
+    .heap = {
+        .init_mem = env_buffer + 8,
+        .init_bytes = sizeof(env_buffer) - 8,
+    }
+};
+
+static void *env_malloc(size_t size) {
+    return k_heap_aligned_alloc(&env_heap, sizeof(void *), size, K_NO_WAIT);
+}
+
+static void *env_realloc(void *ptr, size_t size) {
+    k_spinlock_key_t key = k_spin_lock(&env_heap.lock);
+    void *p = sys_heap_aligned_realloc(&env_heap.heap, ptr, sizeof(void *), size);
+    k_spin_unlock(&env_heap.lock, key);
+    return p;
+}
+
+static void env_release(void *ptr) {
+    k_heap_free(&env_heap, ptr);
+}
+
+static const struct env_alloctor env_allocator = {
+    .alloc   = env_malloc,
+    .realloc = env_realloc,
+    .release = env_release
+};
+
+/*
  * Log printer register 
  */
 static int __rte_notrace printk_format(void *context, const char *fmt, va_list ap) {
@@ -454,12 +489,13 @@ static void __rte_unused __rte_notrace partition_iterator(const char *name, uint
 }
 
 static void gpt_update_notify(void) {
-    extern int usr_partition_init(bool reinit);
+    extern int usr_partition_init(void);
     const struct gpt_entry *gpe;
     static bool first = true;
     int err;
 
-    gpe = gpt_find("reserved");
+    gpt_dump();
+    gpe = gpt_find("user");
     rte_assert0(gpe != NULL);
 
     printk("Paritiion build: device(%s) offset(0x%x) size(%x) first(%d)\n",
@@ -469,14 +505,15 @@ static void gpt_update_notify(void) {
         err = partitions_configure_build(gpe->offset, 
             gpe->size, gpe->parent, false);
         rte_assert0(err == 0);
-        rte_assert0(usr_partition_init(false) == 0);
+        rte_assert0(usr_partition_init() == 0);
         first = false;
     } else {
+        sys_stop_notify(SHUTDOWN_OTA, true);
         k_sched_lock();
         err = partitions_configure_rebuild(gpe->offset, 
             gpe->size, gpe->parent, false);
         rte_assert0(err == 0);
-        rte_assert0(usr_partition_init(true) == 0);
+        rte_assert0(usr_partition_init() == 0);
         k_sched_unlock();
     }
 }
@@ -498,6 +535,7 @@ static int __rte_unused __rte_notrace platform_partition_init(void) {
         disk_device_open("spi_flash_2", &dd);
     rte_assert0(dd != NULL);
 
+    //TODO: process GPT corrupt?
     bin = general_malloc(max_buflen);
     rte_assert0(bin != NULL);
     rte_assert0(disk_device_read(dd, bin, max_buflen, pe->offset) == 0);
@@ -506,9 +544,41 @@ static int __rte_unused __rte_notrace platform_partition_init(void) {
     rte_assert0(lib_crc32(bin->data, bin->size) == bin->crc);
     gpt_register_update_cb(gpt_update_notify);
     rte_assert0(gpt_load(bin->data) == 0);
-    gpt_dump();
-    general_free(bin);
 
+    /* 
+     * Load fireware parameters
+     */
+    const struct gpt_entry *gpe = gpt_find("param");
+    if (gpe) {
+        int err = disk_device_open(gpe->parent, &dd);
+        if (err) {
+            pr_err("Open %s failed\n", gpe->parent);
+            goto _exit;
+        }
+
+        err = disk_device_read(dd, bin, max_buflen, gpe->offset);
+        if (err)
+            goto _exit;
+        
+        if (bin->magic != FILE_HMAGIC) {
+            pr_err("fwparam.bin magic is invalid\n");
+            goto _exit;
+        }
+        if (bin->size >= max_buflen) {
+            pr_err("fwparam.bin is too large\n");
+            goto _exit;
+        }
+        if (lib_crc32(bin->data, bin->size) != bin->crc) {
+            pr_err("fwparam.bin check failed\n");
+            goto _exit;
+        }
+
+        fw_load_pararm(bin->data);
+        rte_dumpenv();
+    }
+
+_exit:
+    general_free(bin);
     return 0;
 }
 
@@ -552,6 +622,7 @@ static void platform_enter_transport(void) {
     sys_shutdown(0, false);
 }
 
+WK_LOCK_DEFINE(os_platform, FULL_WAKE_LOCK)
 static K_MUTEX_DEFINE(screen_mtx);
 
 static bool platform_screen_is_up(void) {
@@ -620,6 +691,7 @@ os_platform_init(const struct device *dev __rte_unused) {
     if (rtc_dev)
         rtc_enable(rtc_dev);
 
+    rte_initenv(&env_allocator);
     platform_partition_init();
     disklog_format_init(&disk_printer);
     pr_disklog_init(&disk_printer);

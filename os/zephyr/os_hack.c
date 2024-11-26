@@ -65,9 +65,6 @@ int _os_hack_init(void) {
 
 static int uisrv_ackcnt, uisrv_reqcnt;
 static os_timer_t mon_timer;
-static tid_node_t uisrv_handle = {
-	.name = "ui_service"
-};
 
 static void uisrv_ack(struct app_msg *msg, int cmd, void *arg) {
 	(void) msg;
@@ -89,7 +86,10 @@ static bool uisrv_heartick_request(void) {
 		k_panic();
 		return -2;
 	}
-	int err = msg_manager_send_async_msg_tid(&uisrv_handle, &msg);
+	
+#ifdef __creek_patch__
+	int err = msg_manager_send_async_msg("ui_service", &msg);
+#endif /* __creek_patch__ */
 	if (err == -ESRCH) {
 		pr_dbg("UI service has been killed\n");
 		return false;

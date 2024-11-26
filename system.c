@@ -15,6 +15,7 @@
 #include "basework/generic.h"
 #include "basework/dev/blkdev.h"
 #include "basework/log.h"
+#include "basework/lib/crc.h"
 
 
 #define OBSERVER_CLASS_DEFINE
@@ -59,6 +60,10 @@ static void crash_timer_cb(os_timer_t timer, void *arg) {
     sys_crash_clear();
 }
 
+static uint16_t crash_crc(struct nvram_desc *nvram) {
+    return lib_crc16((uint8_t *)&nvram->crash, offsetof(struct nvram_crash, crc));
+}
+
 const struct system_operations * __rte_notrace sys_operation_get(void) {
     return _system_operation;
 }
@@ -85,24 +90,27 @@ bool sys_is_firmware_okay(void) {
 
 int sys_firmware_evaluate(void) {
     struct nvram_desc *nvram = sys_nvram_get();
+    struct nvram_crash *crash = &nvram->crash;
 
     pr_notice("crash count: %d, crash_firsttime: %u\n", 
-        nvram->crash.count, nvram->crash.start_time);
+        crash->count, crash->start_time);
     
-    if (nvram->crash.header != CRASH_HEADER) {
-        memset(&nvram->crash, 0, sizeof(nvram->crash));
-        nvram->crash.header = CRASH_HEADER;
-        nvram->crash.start_time = _system_operation->get_utc();
+    if (crash->header != CRASH_HEADER ||
+        crash->crc != crash_crc(nvram)) {
+        crash->header = CRASH_HEADER;
+        crash->start_time = _system_operation->get_utc();
+        crash->count = 0;
+        crash->crc = crash_crc(nvram);
         pr_warn("*** Crash detector is invalid ***\n");
     }
 
     /* starting the recovery timer */
     os_timer_mod(crash_timer, MILLISECONDS(CRASH_TIMEOUT));
     
-	if (nvram->crash.count == 2)
+	if (crash->count == 2)
 		return CRASH_STATE_RECOVER;
 	
-	if (nvram->crash.count >= 4)
+	if (crash->count >= 4)
 		return CRASH_STATE_FATAL;
 	
 	return CRASH_STATE_NORMAL;
@@ -115,37 +123,58 @@ void sys_crash_up(void) {
     os_critical_lock
 	nvram->crash.count++;
     os_critical_unlock
+    nvram->crash.crc = crash_crc(nvram);
 }
 
 void sys_crash_clear(void) {
     struct nvram_desc *nvram = sys_nvram_get();
+    os_critical_declare
 
+    os_critical_lock
     nvram->crash.header = 0;
-    nvram->crash.state  = CRASH_STATE_NORMAL;
+    nvram->crash.count = 0;
+    os_critical_unlock
+}
+
+static void notify_locked(bool reboot, int reason, void *ret_ip) {
+    static bool notified;
+    if (!notified) {
+        struct shutdown_param param;
+
+        notified = true;
+        param.reason = reason;
+        param.ptr = ret_ip;
+        pr_notice("system notify %s with RET_IP(%p)\n", 
+            reboot? "SYS_REPORT_REBOOT": "SYS_REPORT_POWOFF",
+            ret_ip
+        );
+        system_notify(reboot? SYS_REPORT_REBOOT: SYS_REPORT_POWOFF, &param);
+    }
+}
+
+void sys_stop_notify(int reason, bool reboot) {
+    guard(mutex)(&mutex);
+    notify_locked(reboot, reason, RTE_RET_IP);
 }
 
 void sys_shutdown(int reason, bool reboot) {
     const struct system_operations *ops = _system_operation; 
-    struct shutdown_param param;
 
     assert(ops != NULL);
+    scoped_guard(mutex, &mutex) {
+        sys_crash_clear();
+        
+        /* Notify application */
+        notify_locked(reboot, reason, RTE_RET_IP);
 
-    os_mtx_lock(&mutex);
-    sys_crash_clear();
-    
-    /* Notify application */
-    param.reason = reason;
-    param.ptr = RTE_RET_IP;
-    system_notify(reboot? SYS_REPORT_REBOOT: SYS_REPORT_POWOFF, &param);
-
-    /* Sync data to disk */
-    blkdev_sync();
-    
-    if (reboot)
-        ops->reboot(reason);
-    else
-        ops->shutdown();
-    os_mtx_unlock(&mutex);
+        /* Sync data to disk */
+        blkdev_sync();
+        
+        if (reboot)
+            ops->reboot(reason);
+        else
+            ops->shutdown();
+    }
 
     pr_err("Never reached here!\n");
     while (1);

@@ -9,6 +9,7 @@ zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/libcrc16.c
     ${CMAKE_CURRENT_SOURCE_DIR}/libcrc32.c
     ${CMAKE_CURRENT_SOURCE_DIR}/fnmatch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/libenv.c
 )
 
 if (NOT CONFIG_BOOTLOADER)

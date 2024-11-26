@@ -1,31 +1,58 @@
 {
 	"description": "Global Partition Table",
 	"version": "1.0.0",
+	"target": "cwl01",
 	"devices": [
 		{
 			"name": "norFlash",
-			"capacity": "0x2000000",
-			"storage": "spi_flash",
+			"capacity": "0x1000000",
+			"storage": "spi_flash_2",
 			"partitions": [
 				{
+					"label": "param",
+					"offset": "0x97000",
+					"size": "0x2000",
+					"bin": "fwparam.bin"
+				},
+				{
 					"label": "picture",
-					"offset": "0x400000",
-					"size": "0x400000"
+					"offset": "0x99000",
+					"size": "0x37E000",
+					"bin": "res.bin"
+				},
+				{
+					"label": "picture_ext",
+					"offset": "0x417000",
+					"size": "0x30000",
+					"bin": "res_ext.bin"
 				},
 				{
 					"label": "font",
-					"offset": "0x800000",
-					"size": "0x800000"
+					"offset": "0x447000",
+					"size": "0x300000",
+					"bin": "fonts.bin"
 				},
 				{
-					"label": "watchface",
-					"offset": "0x1000000",
-					"size": "0x300000"
+					"label": "udisk",
+					"offset": "0x747000",
+					"size": "0x300000",
+					"bin": "udisk.bin"
 				},
 				{
-					"label": "reserved",
-					"offset": "0x1300000",
-					"size": "0x200000"
+					"label": "dynamic",
+					"offset": "0xA47000",
+					"size": "0x10000",
+					"bin": "dynres.bin"
+				},
+				{
+					"label": "gps_bream",
+					"offset": "0xA57000",
+					"size": "0x40000"
+				},
+				{
+					"label": "user",
+					"offset": "0xA97000",
+					"size": "0x569000"
 				}
 			]
 		}

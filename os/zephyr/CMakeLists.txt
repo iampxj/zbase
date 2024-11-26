@@ -15,6 +15,7 @@ zephyr_library_sources(
     os_rq.c
     os_hack.c
     os_bus.c
+    os_param.c
 )
 zephyr_library_sources_ifdef(CONFIG_BCACHE
     os_bcachedev.c

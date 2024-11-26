@@ -7,6 +7,8 @@
 #endif
 
 #include <errno.h>
+#include <string.h>
+
 #include "basework/generic.h"
 #include "basework/dev/partition.h"
 #include "basework/dev/partition_file.h"
@@ -20,7 +22,7 @@
 /*
  * Partition configure table
  */
-PARTITION_TABLE_DEFINE(partitions_usr_configure) {
+static const struct disk_partition partitions_usr_configure[] = {
 #ifdef CONFIG_CUSTOM_PT_TABLE
     #include CONFIG_MINOR_PT_FILE
 #else
@@ -32,7 +34,7 @@ PARTITION_TABLE_DEFINE(partitions_usr_configure) {
 /*
  * This partition can not be erased when the system reset factory settings
  */
-PARTITION_TABLE_DEFINE(partitions_usr2_configure) {
+static const struct disk_partition partitions_usr2_configure[] = {
 #ifdef CONFIG_CUSTOM_PT_TABLE
     #include CONFIG_MINOR_PT2_FILE
 #else
@@ -41,27 +43,22 @@ PARTITION_TABLE_DEFINE(partitions_usr2_configure) {
     PARTITION_TERMINAL
 };
 
-int usr_partition_init(bool reinit) {
+enum config_items {
+    USER_CFG_ITEMS  = rte_array_size(partitions_usr_configure),
+    USER2_CFG_ITEMS = rte_array_size(partitions_usr2_configure),
+};
+
+int usr_partition_init(void) {
+    static struct disk_partition user1_pt[USER_CFG_ITEMS];
+    static struct disk_partition user2_pt[USER2_CFG_ITEMS];
     int err;
 
-    if (reinit) {
-        struct disk_partition *dp;
-        dp = partitions_usr_configure;
-        while (dp->name) {
-            dp->offset = -1;
-            dp++;
-        }
-        dp = partitions_usr2_configure;
-        while (dp->name) {
-            dp->offset = -1;
-            dp++;
-        }
-    } else {
-        usr_sfile_init();
-    }
+    memcpy(user1_pt, partitions_usr_configure, sizeof(user1_pt));
+    memcpy(user2_pt, partitions_usr2_configure, sizeof(user2_pt));
 
-    err = logic_partitions_create("usrdata", partitions_usr_configure);
+    usr_sfile_init();
+    err = logic_partitions_create("usrdata", user1_pt);
     if (!err)
-        err = logic_partitions_create("usrdata2", partitions_usr2_configure);
+        err = logic_partitions_create("usrdata2", user2_pt);
     return err;
 }

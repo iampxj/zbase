@@ -6,12 +6,16 @@ import json
 
 partition_list = []
 partition_ver = ''
+target_device = ''
 
 def parse_gpt(file):
     with open(file, 'r') as fin:
         js = json.load(fin)
         version = js['version']
         devices = js['devices']
+        if 'target' in js:
+            global target_device
+            target_device = js['target']
 
         global partition_list
         global partition_ver
@@ -35,13 +39,9 @@ def parse_gpt(file):
                 if size % 4096 != 0:
                     print('***Error: partition size error: ', pt['label'])
                     return
-
-                if pt['label'] == 'picture':
-                    partition_list.append(('res.bin', offset, size))
-                elif pt['label'] == 'font':
-                    partition_list.append(('fonts.bin', offset, size))
-                elif pt['label'] == 'watchface':
-                    partition_list.append(('udisk.bin', offset, size))
+                
+                if 'bin' in pt:
+                    partition_list.append((pt['bin'], offset, size))
 
                 last_offset = offset
                 last_size   = size
@@ -53,37 +53,47 @@ def parse_gpt(file):
 
 def merge_bin(dir):
     offset = 0
-    dst_path = os.path.join(dir, 'ui.bin')
+    dst_path = os.path.join(dir, 'gpdata.bin')
 
     print('GPT Version: ', partition_ver)
     with open(dst_path, 'wb') as f:
         for pt in partition_list:
             src_path = os.path.join(dir, pt[0])
-            filesize = os.path.getsize(src_path)
-            if filesize > pt[2]:
-                print('***Error: file({}) is large than partition size({})'.format(src_path, hex(pt[2])))
-                return
-            
-            with open(src_path, 'rb') as frd:
-                f.seek(offset)
-                f.write(frd.read(-1))
-                frd.close()
-            
-            print('  => name({}) offset({}) size({}) binofs({})'.format(pt[0], hex(pt[1]), hex(pt[2]), hex(offset)))
+            if os.path.exists(src_path):
+                filesize = os.path.getsize(src_path)
+                if filesize > pt[2]:
+                    print('***Error: file({}) is large than partition size({})'.format(src_path, hex(pt[2])))
+                    return
+                
+                with open(src_path, 'rb') as frd:
+                    f.seek(offset)
+                    f.write(frd.read(-1))
+                    frd.close()
+                
+                print('  => name({}) offset({}) size({}) binofs({})'.format(pt[0], hex(pt[1]), hex(pt[2]), hex(offset)))
 
-            # partition size
-            offset += pt[2]
-    print('Generate binary: {} size({})'.format(dst_path, hex(offset)))
+                # partition size
+                offset += pt[2]
+            else:
+                offset += pt[2]
+                print('file({}) is not exist'.format(pt[0]))
+
+    print('Generate binary: {} size({}) device({})'.format(dst_path, hex(offset), target_device))
 
 def main(argv):
-    if len(argv) != 2:
-        print('{} [directory]'.format(argv[0]))
+    if len(argv) < 2:
+        print('{} [file] [[stdout]]'.format(argv[0]))
         return
-
-    dir = argv[1]
-    print('GPT Build dir: ', dir)
-    parse_gpt(os.path.join(dir, 'partition.json'))
-    merge_bin(dir)
+    
+    if (len(argv) == 3):
+        sys.stdout = argv[2]
+        
+    file = argv[1]
+    print('GPT file: ', file)
+    parse_gpt(file)
+    merge_bin(os.path.dirname(file))
+    if sys.stdout != sys.__stdout__:
+        sys.stdout = sys.__stdout__
 
 if __name__ == "__main__":
     main(sys.argv)

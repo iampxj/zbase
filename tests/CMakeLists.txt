@@ -11,7 +11,7 @@ if (NOT WINDOWS)
         # ${CMAKE_CURRENT_SOURCE_DIR}/rq_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/fs_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/ccinit_test.cc
-        ${CMAKE_CURRENT_SOURCE_DIR}/blkdev_test.cc
+        # ${CMAKE_CURRENT_SOURCE_DIR}/blkdev_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/fw_selfwrite_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/partition_test.cc
         #${CMAKE_CURRENT_SOURCE_DIR}/ota_fstream_test.cc
@@ -26,6 +26,7 @@ if (NOT WINDOWS)
         # ${CMAKE_CURRENT_SOURCE_DIR}/circlebuf_test.cc
         # ${CMAKE_CURRENT_SOURCE_DIR}/fifofs_test.cc
         ${CMAKE_CURRENT_SOURCE_DIR}/idr_test.cc
+        ${CMAKE_CURRENT_SOURCE_DIR}/libenv_test.cc
     )
 endif()
 

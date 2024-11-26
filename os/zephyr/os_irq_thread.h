@@ -21,7 +21,9 @@ struct irq_thread_arg {
 	void *arg;
 };
 
-static inline void irq_daemon_thread(void *arg) {
+#ifdef IRQ_THREAD_DEFINE
+WK_LOCK_DEFINE(irq_thread, PARTIAL_WAKE_LOCK)
+void irq_daemon_thread(void *arg) {
 	struct irq_thread_arg *p = arg;
 	assert(p != NULL);
 	assert(p->sync != NULL);
@@ -33,6 +35,10 @@ static inline void irq_daemon_thread(void *arg) {
         sys_wake_unlock_ext(PARTIAL_WAKE_LOCK, APP_WAKE_LOCK_USER);
 	}
 }
+#else /* !IRQ_THREAD_DEFINE */
+
+void irq_daemon_thread(void *arg);
+#endif /* IRQ_THREAD_DEFINE */
 
 #define MTX_DEFINE(name) K_MUTEX_DEFINE(name)
 #define mtx_lock(x)   k_mutex_lock(x, K_FOREVER)

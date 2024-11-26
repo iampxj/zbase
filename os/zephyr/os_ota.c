@@ -49,6 +49,12 @@ struct file_partition {
     const char *name;
 };
 
+struct ram_parition {
+    const char *name;
+    size_t fsize;
+    char buffer[];
+};
+
 struct ota_region {
     uint32_t begin;
     uint32_t end;
@@ -56,8 +62,9 @@ struct ota_region {
 
 #define ota_get_partition(a, b) partition_get_part(b)
 
+static const struct ota_fstream_ops ram_fstream_ops;
+static const struct ota_fstream_ops fstream_ops;
 static bool res_first = true;
-static bool ota_record_new;
 static struct file_partition file_dev;
 static struct partition_entry resext_entry = {
     .name = {"res_ext"},
@@ -85,6 +92,20 @@ const struct partition_entry *partition_get_stf_part_ext(
 #define ota_partition_get(a, b)  __ota_partition_get(a, b, &file_dev)
 #define ota_partition_get_nodd(a, b) __ota_partition_get(a, b, NULL)
 
+static const char *part_to_devname(uint8_t storage) {
+    switch(storage) {
+    case STORAGE_ID_NOR:
+        return "spi_flash";
+    case STORAGE_ID_NAND:
+        return "spinand";
+    case STORAGE_ID_DATA_NOR:
+        return "spi_flash_2";
+    default:
+        rte_assert0(0);
+        return NULL;
+    }
+}
+
 static struct partition_entry *__ota_partition_get(uint8_t unused, uint8_t file_id, 
     struct file_partition *fp) {
     const struct partition_entry *parti;
@@ -94,20 +115,7 @@ static struct partition_entry *__ota_partition_get(uint8_t unused, uint8_t file_
     rte_assert(parti != NULL);
 
     if (fp) {
-        switch(parti->storage_id) {
-        case STORAGE_ID_NOR:
-            disk_device_open("spi_flash", &fp->dd);
-            break;
-        case STORAGE_ID_NAND:
-            disk_device_open("spinand", &fp->dd);
-            break;
-        case STORAGE_ID_DATA_NOR:
-            disk_device_open("spi_flash_2", &fp->dd);
-            break;
-        default:
-            rte_assert0(0);
-            break;
-        }
+        disk_device_open(part_to_devname(parti->storage_id), &fp->dd);
         rte_assert(file_dev.dd != NULL);
     }
 
@@ -242,41 +250,53 @@ static int generate_ota_nlog(const struct disk_partition *dp,
      * Global parition table
      */
     pe = ota_partition_get_nodd(STORAGE_ID_NOR, 30);
-    rte_assert(pe != NULL);
-    strlcpy(rec.nodes[idx].f_name, "gpt.bin", MAX_NAMELEN);
-    rec.nodes[idx].f_offset = pe->offset;
-    rec.nodes[idx].f_size   = pe->size;
-    idx++;
+    if (pe != NULL) {
+        strlcpy(rec.nodes[idx].node.f_name, "gpt.bin", MAX_NAMELEN);
+        strlcpy(rec.nodes[idx].d_device, part_to_devname(pe->storage_id), MAX_NAMELEN);
+        strlcpy(rec.nodes[idx].s_device, fw->parent, MAX_NAMELEN);
+        rec.nodes[idx].node.f_offset = pe->offset;
+        rec.nodes[idx].node.f_size   = pe->size;
+        idx++;
+    }
 
     /*
      * Firmware
      */
     pe = ota_partition_get_nodd(STORAGE_ID_NOR, 4);
-    rte_assert(pe != NULL);
-    strlcpy(rec.nodes[idx].f_name, "zephyr.bin", MAX_NAMELEN);
-    rec.nodes[idx].f_offset = pe->offset;
-    rec.nodes[idx].f_size   = pe->size;
-    idx++;
+    if (pe != NULL) {
+        strlcpy(rec.nodes[idx].node.f_name, "zephyr.bin", MAX_NAMELEN);
+        strlcpy(rec.nodes[idx].d_device, part_to_devname(pe->storage_id), MAX_NAMELEN);
+        strlcpy(rec.nodes[idx].s_device, fw->parent, MAX_NAMELEN);
+        rec.nodes[idx].node.f_offset = pe->offset;
+        rec.nodes[idx].node.f_size   = pe->size;
+        idx++;
+    }
 
     /*
      * Increase resource for picture
      */
     gpe = gpt_find("res+.bin");
-    rte_assert(gpe != NULL);
-    strlcpy(rec.nodes[idx].f_name, "res+.bin", MAX_NAMELEN);
-    rec.nodes[idx].f_offset = gpe->offset;
-    rec.nodes[idx].f_size   = gpe->size;
-    idx++;
+    if (gpe != NULL) {
+        strlcpy(rec.nodes[idx].node.f_name, "res+.bin", MAX_NAMELEN);
+        strlcpy(rec.nodes[idx].d_device, gpe->parent, MAX_NAMELEN);
+        strlcpy(rec.nodes[idx].s_device, fw->parent, MAX_NAMELEN);
+        rec.nodes[idx].node.f_offset = gpe->offset;
+        rec.nodes[idx].node.f_size   = gpe->size;
+        idx++;
+    }
     
     /*
      * Increase resource for font
      */
     gpe = gpt_find("fonts+.bin");
-    rte_assert(gpe != NULL);
-    strlcpy(rec.nodes[idx].f_name, "fonts+.bin", MAX_NAMELEN);
-    rec.nodes[idx].f_offset = gpe->offset;
-    rec.nodes[idx].f_size   = gpe->size;
-    idx++;
+    if (gpe != NULL) {
+        strlcpy(rec.nodes[idx].node.f_name, "fonts+.bin", MAX_NAMELEN);
+        strlcpy(rec.nodes[idx].d_device, gpe->parent, MAX_NAMELEN);
+        strlcpy(rec.nodes[idx].s_device, fw->parent, MAX_NAMELEN);
+        rec.nodes[idx].node.f_offset = gpe->offset;
+        rec.nodes[idx].node.f_size   = gpe->size;
+        idx++;
+    }
 
     rte_assert0(idx <= MAX_FWPACK_FILES);
     rec.count = idx;
@@ -292,7 +312,6 @@ static int generate_ota_nlog(const struct disk_partition *dp,
 #endif
     
     pr_dbg("updated ota information\n");
-
     return err;
 }
 
@@ -439,12 +458,20 @@ __partition_open(const char *name, size_t fsize) {
         return &file_dev;
     }
 
+    if (!strcmp(name, "gpt.bin")) {
+        pr_dbg("open gpt partition: start(0x%x) size(%d)\n", 
+            parti->offset, parti->size);
+        ota_fstream_set_ops(&ram_fstream_ops);
+        return ram_fstream_ops.open(name, fsize);
+    }
+
     /* Firmware partition */
     if (!strcmp(name, "zephyr.bin") ||
         !strcmp(name, "fwpack.bin")) {
         const struct disk_partition *dp, *fdp;
         dp = disk_partition_find("firmware");
         rte_assert(dp != NULL);
+        file_dev.dd = disk_device_find_by_part(dp);
         file_dev.offset = dp->offset;
         file_dev.len = dp->len;
         file_dev.name = "firmware";
@@ -458,11 +485,9 @@ __partition_open(const char *name, size_t fsize) {
             if (!strcmp(name, "fwpack.bin")) {
                 pr_notice("generate firmware package information\n");
                 generate_ota_nlog(fdp, dp);
-                ota_record_new = true;
             } else {
                 pr_notice("generate firmware information\n");
                 generate_ota_log(fdp, dp);
-                ota_record_new = false;
             }
         }
 
@@ -526,7 +551,8 @@ static void partition_erase(struct file_partition *fp, uint32_t ofs,
     size_t bytes = rte_min(max_size, remain);
     int err;
 
-    pr_dbg("@ erasing address(0x%08x) size(0x%x) ...\n", ofs, bytes);
+    pr_dbg("@%s erasing address(0x%08x) size(0x%x) ...\n", 
+        disk_device_get_name(fp->dd), ofs, bytes);
     err = disk_device_erase(fp->dd, ofs, bytes);
     rte_assert(err == 0);
     (void) err;
@@ -613,6 +639,7 @@ static void partition_completed(int err, void *fp, const char *fname,
         size_t max_buflen = 4096;
         struct bin_header *bin;
 
+        pr_info("partition file post process\n");
         bin = general_malloc(max_buflen);
         rte_assert0(bin != NULL);
         rte_assert0(disk_device_read(filp->dd, bin, 4096, filp->offset) == 0);
@@ -620,7 +647,6 @@ static void partition_completed(int err, void *fp, const char *fname,
         rte_assert0(bin->size < max_buflen);
         rte_assert0(lib_crc32(bin->data, bin->size) == bin->crc);
         rte_assert0(gpt_load(bin->data) == 0);
-        gpt_dump();
         general_free(bin);
     }
 }
@@ -661,14 +687,71 @@ static bool check_ota_environment(const struct file_header *header) {
     return true;
 }
 
+static const struct ota_fstream_ops fstream_ops = {
+    .open  = partition_open,
+    .close = partition_close,
+    .write = partition_write,
+    .completed = partition_completed
+};
+
+static void* ram_partition_open(const char *name, size_t fsize) {
+    struct ram_parition *rp;
+
+    rp = general_calloc(1, sizeof(*rp) + fsize);
+    if (rp) {
+        rp->name = name;
+        rp->fsize = fsize;
+    }
+    return rp;
+}
+
+static void ram_partition_close(void *fp) {
+    if (fp)
+        general_free(fp);
+    ota_fstream_set_ops(&fstream_ops);
+}
+
+static int ram_partition_write(void *fp, const void *buf, 
+    size_t size, uint32_t offset) {
+    struct ram_parition *rp = fp;
+
+    if (offset + size > rp->fsize)
+        return -EFBIG;
+
+    memcpy(&rp->buffer[offset], buf, size);
+    return size;
+}
+
+static void ram_partition_completed(int err, void *fp, const char *fname, 
+    size_t size) {
+    if (err)
+        return;
+
+    /*
+     * Reload GPT information
+     */
+    if (!strcmp(fname, "gpt.bin")) {
+        struct ram_parition *rp = fp;
+        struct bin_header *bin = rp->buffer;
+
+        pr_info("checking gpt.bin and load it...\n");
+        rte_assert0(bin->magic == FILE_HMAGIC);
+        rte_assert0(bin->size <= rp->fsize);
+        rte_assert0(lib_crc32(bin->data, bin->size) == bin->crc);
+        rte_assert0(gpt_load(bin->data) == 0);
+    }
+}
+
+static const struct ota_fstream_ops ram_fstream_ops = {
+    .open  = ram_partition_open,
+    .close = ram_partition_close,
+    .write = ram_partition_write,
+    .completed = ram_partition_completed
+};
+
 static int __rte_notrace ota_fstream_init(const struct device *dev) {
     (void) dev;
-    static const struct ota_fstream_ops fstream_ops = {
-        .open  = partition_open,
-        .close = partition_close,
-        .write = partition_write,
-        .completed = partition_completed
-    };
+
     ota_fstream_set_ops(&fstream_ops);
     ota_fstream_set_envchecker(check_ota_environment);
     return 0;

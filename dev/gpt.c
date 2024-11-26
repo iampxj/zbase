@@ -2,6 +2,8 @@
  * Copyright 2024 wtcat
  */
 
+#define pr_fmt(fmt) "<gpt>: "fmt 
+
 #include <stdint.h>
 #include <string.h>
 
@@ -90,7 +92,7 @@ void gpt_dump(void) {
     }
 
     pr_notice(
-        "******** Global Parition Table (version: %s) *********\n", 
+        "\n\n*********** Global Parition Table (version: %s) **************\n", 
         gpt->version
     );
     pr_notice("| %-*.*s | %-*.*s |   offset   |    length  |\n", 
@@ -114,6 +116,7 @@ void gpt_dump(void) {
             gpt->gps[i].size
         );
     }
+    pr_notice("\n*******************************************************\n\n");
 }
 
 int gpt_load(const char *buffer) {

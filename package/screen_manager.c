@@ -394,6 +394,8 @@ int screen_midsuper_exit(void) {
         }
     } else if (IS_STATE_EQUEL(sc, super_state)) {
         sc->midsuper_pending = 0;
+		os_timer_del(sc->timer);
+		os_timer_update_handler(sc->timer, screen_on_timeout, sc);
     }
     MTX_UNLOCK();
     return err;

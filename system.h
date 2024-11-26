@@ -57,11 +57,11 @@ struct nvram_desc {
 #else
     char    fault_ram[2048];
 #endif
-    struct {
+    struct nvram_crash {
         uint32_t header;
         uint32_t start_time;
         uint16_t count;
-        uint16_t state;
+        uint16_t crc;
 #define CRASH_STATE_NORMAL         0
 #define CRASH_STATE_RECOVER        1
 #define CRASH_STATE_RECOVER_POST   2
@@ -112,6 +112,14 @@ struct system_operations {
  * @reboot: enable reboot
  */
 void sys_shutdown(int reason, bool reboot);
+
+/*
+ * sys_stop_notify - Notify application that the system will shutdown
+ *
+ * @reason: The reason that shutdown or reboot
+ * @reboot: enable reboot
+ */
+void sys_stop_notify(int reason, bool reboot);
 
 /*
  * sys_enter_tranport - Make system enter transport mode

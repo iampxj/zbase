@@ -18,6 +18,7 @@
 
 #include "basework/dev/disk.h"
 #include "basework/dev/ptfs.h"
+#include "basework/dev/gpt.h"
 #include "basework/generic.h"
 #include "basework/os/osapi_fs.h"
 #include "basework/log.h"
@@ -189,43 +190,29 @@ static struct file_class ptfs_class = {
 };
 
 static int __rte_unused ptfs_impl_register(const struct device *dev) {
+    const struct gpt_entry *gpe;
     uint32_t offset;
     int err;
     (void) dev;
 
-    const struct partition_entry *parti;
-    parti = parition_get_entry2(STORAGE_ID_NOR, PARTITION_FILE_ID_UDISK);
-    if (!parti) {
+    gpe = gpt_find("udisk");
+    if (!gpe) {
         pr_err("Not found udisk parition\n");
         return -ENOENT;
     }
 
-    if (parti->size < CONFIG_PTFS_SIZE) {
+    if (gpe->size < CONFIG_PTFS_SIZE) {
         pr_err("ptfs partition is too large (%d)\n", CONFIG_PTFS_SIZE);
         return -EINVAL;
     }
 
-    offset = parti->offset;
-
+    offset = gpe->offset;
     memset(os_files, 0, sizeof(os_files));
     memset(&ptfs_context, 0, sizeof(ptfs_context));
-    switch (parti->storage_id) {
-    case STORAGE_ID_NOR:
-        err = ptfile_ll_init(PTFS, "spi_flash", offset);
-        break;
-    case STORAGE_ID_NAND:
-        err = ptfile_ll_init(PTFS, "spinand_flash", offset);
-        break;
-    case STORAGE_ID_DATA_NOR:
-        err = ptfile_ll_init(PTFS, "spi_flash_2", offset);
-        break;
-    default:
-        err = -EINVAL;
-        os_panic();
-        break;
-    }
+    err = ptfile_ll_init(PTFS, gpe->parent, offset);
     if (err)
         return err;
+
     pr_notice("## partition filesystem registed start(0x%x) size(%d)\n", 
         offset, CONFIG_PTFS_SIZE);
 
