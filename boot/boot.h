@@ -12,7 +12,7 @@
 extern "C"{
 #endif
 
-#define MAX_FWPACK_FILES 5
+#define MAX_FWPACK_FILES 10
 
 #define FH_NAME_MAX 32
 #define FH_MAGIC 0xa578875a
@@ -60,7 +60,7 @@ struct fwpkg_record {
     uint32_t             dl_offset;
     uint32_t             dl_size;
     uint32_t             count;
-    struct file_node     nodes[MAX_FWPACK_FILES];
+    struct copy_fnode    nodes[MAX_FWPACK_FILES];
     uint32_t             dcrc;
     uint32_t             hcrc;
 };

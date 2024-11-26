@@ -27,12 +27,15 @@
 struct copy_device {
     struct disk_device *dst;
     struct disk_device *src;
+    struct disk_device *idev;
     uint32_t            ioffset;
     void  (*notify)(const char *name, int percent);
 };
 
 struct copy_node {
     const char *name;
+    struct disk_device *sdev;
+    struct disk_device *ddev;
     uint32_t dst_offset;
     uint32_t src_offset;
     uint32_t size;
@@ -41,28 +44,36 @@ struct copy_node {
 PACKAGE_HEADER(package_header, MAX_FWPACK_FILES);
 static uint8_t global_buffer[8192];
 
+
 static void fw_package_dump(const struct file_header *header, 
     const struct fwpkg_record *pi) {
-    pr_dbg("*package current*: magic(0x%x) hcrc(0x%x) num(%d)\n",
-        pi->magic, pi->hcrc, pi->count);
-    if (pi->count < MAX_FWPACK_FILES) {
-        for (uint32_t i = 0; i < pi->count; i++) {
-            pr_dbg("\tname(%s) offset(0x%x) size(0x%x)\n", 
-                pi->nodes[i].f_name,
-                pi->nodes[i].f_offset,
-                pi->nodes[i].f_size
+    
+    if (pi) {
+        pr_dbg("*package current*: magic(0x%x) hcrc(0x%x) num(%d)\n",
+            pi->magic, pi->hcrc, pi->count);
+        uint32_t count = pi->count < MAX_FWPACK_FILES? pi->count: MAX_FWPACK_FILES;
+        for (uint32_t i = 0; i < count; i++) {
+            pr_dbg("\tname(%s) offset(0x%x) size(0x%x) sdev(%s) ddev(%s)\n", 
+                pi->nodes[i].node.f_name,
+                pi->nodes[i].node.f_offset,
+                pi->nodes[i].node.f_size,
+                pi->nodes[i].s_device,
+                pi->nodes[i].d_device
             );
         }
     }
 
-    pr_dbg("*package header*:magic(0x%x) crc(0x%x) size(0x%x) num(%d)\n",
-        header->magic, header->crc, header->size, header->nums);
-    if (header->nums < MAX_FWPACK_FILES) {
-        for (uint32_t i = 0; i < header->nums; i++) {
-            pr_dbg("\tname(%s) offset(0x%x) size(0x%x)\n", 
+    if (header) {
+        pr_dbg("*package header*:magic(0x%x) crc(0x%x) size(0x%x) num(%d)\n",
+            header->magic, header->crc, header->size, header->nums);
+        uint32_t count = header->nums < MAX_FWPACK_FILES? header->nums: MAX_FWPACK_FILES;
+        for (uint32_t i = 0; i < count; i++) {
+            pr_dbg("\tname(%s) offset(0x%x) size(0x%x) sdev(%s) ddev(%s)\n", 
                 header->headers[i].f_name,
                 header->headers[i].f_offset,
-                header->headers[i].f_size
+                header->headers[i].f_size,
+                pi->nodes[i].s_device,
+                pi->nodes[i].d_device
             );
         }
     }
@@ -185,7 +196,7 @@ fw_package_check(struct copy_device *cdev, struct package_header *pheader,
     int err;
 
     pr_dbg("read package data from 0x%x\n", pi->dl_offset);
-    err = disk_device_read(cdev->src, pheader, sizeof(*pheader),
+    err = disk_device_read(cdev->idev, pheader, sizeof(*pheader),
         pi->dl_offset);
     if (err)
         return err;
@@ -198,7 +209,7 @@ fw_package_check(struct copy_device *cdev, struct package_header *pheader,
     }
 
     for (uint32_t i = 0; i < header->nums; i++) {
-        err = file_checksum(&crc, cdev->src, 
+        err = file_checksum(&crc, cdev->idev, 
             pi->dl_offset + header->headers[i].f_offset, 
             header->headers[i].f_size);
         if (err)
@@ -219,7 +230,7 @@ fw_package_record_read(struct copy_device *cdev, struct fwpkg_record *pi) {
     uint32_t crc;
     int err;
 
-    err = disk_device_read(cdev->src, pi, sizeof(*pi), ioffset);
+    err = disk_device_read(cdev->idev, pi, sizeof(*pi), ioffset);
     if (err)
         return err;
 
@@ -231,11 +242,13 @@ fw_package_record_read(struct copy_device *cdev, struct fwpkg_record *pi) {
     
     crc = crc32_calc(0, (uint8_t *)pi, sizeof(*pi) - sizeof(uint32_t));
     if (crc != pi->hcrc) {
+        fw_package_dump(NULL, pi);
         pr_warn("current package information check failed\n");
         return -ENODATA;
     }
 
     if (pi->count > MAX_FWPACK_FILES) {
+        fw_package_dump(NULL, pi);
         pr_err("the number of package partition is too large\n");
         return -EBADF;
     }
@@ -263,18 +276,28 @@ fw_package_update(struct copy_device *cdev, struct fwpkg_record *pi,
         const struct file_node *psrc = &header->headers[i];
 
         for (uint32_t j = 0; j < pi->count; j++) {
-            struct file_node *pdst = &pi->nodes[j];
-            if (strcmp(psrc->f_name, pdst->f_name))
+            struct copy_fnode *pdst = &pi->nodes[j];
+            if (strcmp(psrc->f_name, pdst->node.f_name))
                 continue;
 
-            if (psrc->f_size > pdst->f_size) {
+            if (psrc->f_size > pdst->node.f_size) {
                 pr_err("%s %s is too large! (fsrc: 0x%x fdst: 0x%x)\n", 
-                    __func__, psrc->f_name, psrc->f_size, pdst->f_size);
+                    __func__, psrc->f_name, psrc->f_size, pdst->node.f_size);
                 return -E2BIG;
             }
 
+            if (disk_device_open(pdst->d_device, &cplist[index].ddev)) {
+                pr_err("Not found target device(%s)\n", pdst->d_device);
+                return -ENODEV;
+            }
+
+            if (disk_device_open(pdst->s_device, &cplist[index].sdev)) {
+                pr_err("Not found source device(%s)\n", pdst->s_device);
+                return -ENODEV;
+            }
+
             cplist[index].name = psrc->f_name;
-            cplist[index].dst_offset = pdst->f_offset;
+            cplist[index].dst_offset = pdst->node.f_offset;
             cplist[index].src_offset = psrc->f_offset + pi->dl_offset;
             cplist[index].size = psrc->f_size;
             index++;
@@ -293,7 +316,12 @@ fw_package_update(struct copy_device *cdev, struct fwpkg_record *pi,
 
         /* Install package */
         do {
-            pr_dbg("Copy %s from %x to %x\n", cp->name, cp->src_offset, cp->dst_offset);
+            pr_dbg("=> Copy %s from(%s: %x) to(%s: %x)\n", cp->name, 
+                disk_device_get_name(cp->sdev), cp->src_offset, 
+                disk_device_get_name(cp->ddev), cp->dst_offset
+            );
+            cdev->dst = cp->ddev;
+            cdev->src = cp->sdev;
             err = file_copy(cdev, cp->name, cp->dst_offset, 
                 cp->src_offset, cp->size);
             if (!err)
@@ -308,7 +336,7 @@ fw_package_update(struct copy_device *cdev, struct fwpkg_record *pi,
 
     pi->dcrc = header->crc;
     pi->hcrc = crc32_calc(0, (uint8_t *)pi, sizeof(*pi) - sizeof(uint32_t));
-    err = file_write(cdev->src, cdev->ioffset, pi, sizeof(*pi));
+    err = file_write(cdev->idev, cdev->ioffset, pi, sizeof(*pi));
     if (err)
         pr_err("save package information failed(%d)\n", err);
     
@@ -325,7 +353,7 @@ int general_nboot(
     void       (*notify)(const char *, int)
 ) {
     struct package_header header = {0};
-    struct copy_device cdev;
+    struct copy_device cdev = {0};
     struct fwpkg_record rec;
     int err;
 
@@ -342,13 +370,7 @@ int general_nboot(
     cdev.ioffset = ioffset;
     cdev.notify  = notify;
 
-    err = disk_device_open(ddev, &cdev.dst);
-    if (err) {
-        pr_err("%s not found %s\n", __func__, ddev);
-        goto _exit;
-    }
-
-    err = disk_device_open(sdev, &cdev.src);
+    err = disk_device_open(sdev, &cdev.idev);
     if (err) {
         pr_err("%s not found %s\n", __func__, sdev);
         goto _exit;
