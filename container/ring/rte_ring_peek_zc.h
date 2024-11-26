@@ -146,7 +146,7 @@ __rte_ring_do_enqueue_zc_elem_start(struct rte_ring *r, unsigned int esize,
 	}
 
 	__rte_ring_get_elem_addr(r, head, esize, n, &zcd->ptr1,
-		&zcd->n1, &zcd->ptr2);
+		(uint32_t *)&zcd->n1, &zcd->ptr2);
 
 	if (free_space != NULL)
 		*free_space = free - n;
@@ -354,7 +354,7 @@ __rte_ring_do_dequeue_zc_elem_start(struct rte_ring *r,
 	}
 
 	__rte_ring_get_elem_addr(r, head, esize, n, &zcd->ptr1,
-		&zcd->n1, &zcd->ptr2);
+		(uint32_t *)&zcd->n1, &zcd->ptr2);
 
 	if (available != NULL)
 		*available = avail - n;

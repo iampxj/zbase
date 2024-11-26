@@ -441,7 +441,10 @@ rte_atomic32_exchange(volatile uint32_t *dst, uint32_t val)
  * The atomic counter structure.
  */
 typedef struct {
-	volatile int32_t cnt; /**< An internal counter value. */
+	union {
+		volatile int32_t cnt; /**< An internal counter value. */
+		volatile uint32_t ucnt;
+	};
 } rte_atomic32_t;
 
 /**

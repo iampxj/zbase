@@ -5,6 +5,7 @@
 #define pr_fmt(fmt) "<gpt>: "fmt 
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "basework/errno.h"
@@ -207,7 +208,7 @@ int gpt_load(const char *buffer) {
     cJSON_ArrayForEach(obj, devs) {
         cJSON *pte = cJSON_GetObjectItemCaseSensitive(obj, "partitions");
         const char *storage;
-        uint32_t capacity;
+        uint32_t capacity = 0;
         int icount;
         cJSON *pte_obj;
 

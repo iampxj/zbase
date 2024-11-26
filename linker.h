@@ -63,9 +63,9 @@ extern "C" {
 /*
  * Foreach section
  */
-#define LINKER_SET_FOREACH(set, item) \
-    for (item = LINKER_SET_BEGIN(set); \
-        item < LINKER_SET_END(set); \
+#define LINKER_SET_FOREACH(set, item, type) \
+    for (volatile type *item = (volatile type *)LINKER_SET_BEGIN(set); \
+        item < (volatile type *)LINKER_SET_END(set); \
         ++item \
     )
 
