@@ -162,7 +162,7 @@ static int __blkdev_sync(bool invalid) {
         err = flush_cache_block(blk_buffer.dd);
 	    if (invalid && err == 0)
 			blk_buffer.offset = UINT32_MAX;
-        err |= disk_device_ioctl(blk_buffer.dd, DISK_SYNC, NULL);
+        disk_device_ioctl(blk_buffer.dd, DISK_SYNC, NULL);
         MTX_UNLOCK();
     }
     return err;

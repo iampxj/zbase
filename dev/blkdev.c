@@ -147,7 +147,8 @@ bdev_sync(long expired, int max_blks, bool invalid) {
             struct block_device, link);
         os_mtx_lock(&bdev->mtx);
         err |= blkdev_sync_locked(bdev, expired, max_blks, invalid);
-        err |= disk_device_ioctl(bdev->dd, DISK_SYNC, NULL);
+        if (expired > CONFIG_BLKDEV_SWAP_PERIOD)
+            disk_device_ioctl(bdev->dd, DISK_SYNC, NULL);
         os_mtx_unlock(&bdev->mtx);
     }
     return err;
