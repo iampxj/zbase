@@ -352,28 +352,36 @@ _unlock:
 
 int ptfile_ll_seek(struct ptfs_context *ctx, struct ptfs_file *filp, 
     off_t offset, int whence) {
+    int err = 0;
 
     MTX_LOCK(ctx->mtx);
     switch (whence) {
     case VFS_SEEK_SET:
-        if (offset > (off_t)filp->pmeta->size)
-            return -EINVAL;
+        if (offset > (off_t)filp->pmeta->size) {
+            err = -EINVAL;
+            goto _unlock;
+        }
         filp->rawofs = offset;
         break;
     case VFS_SEEK_CUR:
-        if (filp->rawofs + offset > (uint32_t)filp->pmeta->size)
-            return -EINVAL;
+        if (filp->rawofs + offset > (uint32_t)filp->pmeta->size) {
+            err = -EINVAL;
+            goto _unlock;
+        }
         filp->rawofs += offset;
         break;
     case VFS_SEEK_END:
-        if (offset > 0)
-            return -EINVAL;
+        if (offset > 0) {
+            err = -EINVAL;
+            goto _unlock;
+        }
         filp->rawofs = filp->pmeta->size;
         break;
     }
 
+_unlock:
     MTX_UNLOCK(ctx->mtx);
-    return 0;
+    return err;
 }
 
 int ptfile_ll_unlink(struct ptfs_context *ctx, const char *name) {

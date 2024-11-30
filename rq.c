@@ -329,9 +329,9 @@ void _rq_schedule(struct rq_context *rq) {
         dofree = rn->dofree;
         os_critical_unlock
 
-        /* Executing user function */ 
-        _rq_execute_prepare(rq);
+        /* Executing user function */
         _rq_set_executing(rq, fn);
+        _rq_execute_prepare(rq);
         fn(arg);
         _rq_execute_post(rq);
         _rq_set_executing(rq, NULL);
