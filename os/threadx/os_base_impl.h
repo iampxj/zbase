@@ -126,7 +126,7 @@ _os_thread_sleep(uint32_t ms) {
 
 OS_THREAD_API void 
 _os_thread_yield(void) {
-    
+    tx_thread_relinquish();
 }
 
 OS_THREAD_API void*
