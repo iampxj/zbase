@@ -33,6 +33,7 @@ struct hrtimer_context {
 
 	/* Reload hardware timer to new value */
 	uint32_t (*reload)(struct hrtimer_context *header, uint64_t ns);
+	uint32_t (*remain)(void);
 
 	uint64_t jiffies;
 #ifdef HRTIME_CONTEXT_EXTENSION
@@ -122,20 +123,20 @@ int _hrtimer_insert(struct hrtimer_context *header, struct hrtimer *timer,
 	_RBTree_Initialize_node(&timer->node);
 	_RBTree_Add_child(&timer->node, parent, link);
 	_RBTree_Insert_color(&header->tree, &timer->node);
-	if (new_first == &timer->node)
-		header->reload(header, new_first->expire);
 
-	return 0;
+	return new_first == &timer->node;
 }
 
-void _hrtimer_remove(struct hrtimer_context *header, struct hrtimer *timer) {
+int _hrtimer_remove(struct hrtimer_context *header, struct hrtimer *timer) {
 	if (_hrtimer_pending(timer)) {
-		if (header->first == &timer->node)
+		if (header->first == &timer->node) {
 			_hrtimer_next_first(header, timer);
-
+			return 1;
+		}
 		_RBTree_Extract(&header->tree, &timer->node);
 		_hrtimer_set_state(timer, HRTIMER_INACTIVE);
 	}
+	return 0;
 }
 
 void _hrtimer_expire(struct hrtimer_context *header, struct hrtimer *first, 
@@ -167,19 +168,6 @@ void _hrtimer_expire(struct hrtimer_context *header, struct hrtimer *first,
 	uint64_t now);
 #endif /* USE_HRTIMER_SOURCE_CODE */
 
-static inline uint64_t 
-_hrtimer_cancel(struct hrtimer_context *header, struct hrtimer *timer, 
-	uint64_t now) {
-	uint64_t remaining;
-
-	uint64_t expire = timer->expire;
-	if (now < expire)
-		remaining = expire - now;
-	else
-		remaining = 0;
-	_hrtimer_remove(header, timer);
-	return remaining;
-}
 
 #ifdef __cplusplus
 }
