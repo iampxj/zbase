@@ -13,6 +13,11 @@
 extern "C" {
 #endif
 
+#define HRTIMER_DEBUG_ON
+
+struct hrtimer_context;
+struct hrtimer;
+
 typedef void (*hrtimer_routine_t)(struct hrtimer *);
 
 enum hrtimer_state {
@@ -22,42 +27,14 @@ enum hrtimer_state {
 	HRTIMER_PENDING
 };
 
-struct hrtimer_context {
-	RBTree_Control tree;
-
-	/*
-	 * The scheduled watchdog with the earliest expiration
-	 * time or NULL in case no watchdog is scheduled.
-	 */
-	RBTree_Node *first;
-
-	/* Reload hardware timer to new value */
-	uint32_t (*reload)(struct hrtimer_context *header, uint64_t ns);
-	uint32_t (*remain)(void);
-
-	uint64_t jiffies;
-#ifdef HRTIME_CONTEXT_EXTENSION
-	HRTIME_CONTEXT_EXTENSION
-#endif
-};
-
-#define HRTIMER_CONTEXT_DEFINE(_name, _reload_fn) \
-	struct hrtimer_context _name = { \
-		.tree = RBTREE_INITIALIZER_EMPTY(_name.tree), \
-		.first = NULL, \
-		.reload = _reload_fn \
-	}
-
 struct hrtimer {
 	RBTree_Node node;
-	hrtimer_routine_t routine;
 	uint64_t expire;
+	hrtimer_routine_t routine;
+#ifdef HRTIMER_DEBUG_ON
+	const char *name;
+#endif
 };
-
-static inline struct hrtimer *
-_hrtimer_first(const struct hrtimer_context *header) {
-	return (struct hrtimer *)header->first;
-}
 
 static inline enum hrtimer_state 
 _hrtimer_get_state(const struct hrtimer *timer) {
@@ -72,6 +49,23 @@ _hrtimer_set_state(struct hrtimer *timer, enum hrtimer_state state) {
 static inline bool 
 _hrtimer_pending(const struct hrtimer *timer) {
 	return _hrtimer_get_state(timer) < HRTIMER_INACTIVE;
+}
+
+#ifdef HRTIMER_SOURCE_CODE
+struct hrtimer_context {
+	RBTree_Control tree;
+
+	/*
+	 * The scheduled watchdog with the earliest expiration
+	 * time or NULL in case no watchdog is scheduled.
+	 */
+	RBTree_Node *first;
+};
+
+
+static inline struct hrtimer *
+_hrtimer_first(const struct hrtimer_context *header) {
+	return (struct hrtimer *)header->first;
 }
 
 static inline void 
@@ -92,7 +86,6 @@ _hrtimer_next_first(struct hrtimer_context *header,
 	}
 }
 
-#ifdef USE_HRTIMER_SOURCE_CODE
 int _hrtimer_insert(struct hrtimer_context *header, struct hrtimer *timer,
 	uint64_t expire) {
 	RBTree_Node **link;
@@ -139,35 +132,29 @@ int _hrtimer_remove(struct hrtimer_context *header, struct hrtimer *timer) {
 	return 0;
 }
 
-void _hrtimer_expire(struct hrtimer_context *header, struct hrtimer *first, 
-	uint64_t now) {
-	do {
-		if (first->expire <= now) {
-			hrtimer_routine_t routine;
+#define _hrtimer_expire(header, first, now, ...) \
+	do { \
+		if (first->expire <= now) { \
+			hrtimer_routine_t routine; \
+                                         \
+			_hrtimer_next_first(header, first); \
+			_RBTree_Extract(&header->tree, &first->node); \
+			_hrtimer_set_state(first, HRTIMER_INACTIVE); \
+			routine = first->routine; \
+			__VA_ARGS__ \
+		} else { \
+			break; \
+		} \
+              \
+		first = _hrtimer_first(header); \
+	} while (first != NULL)
 
-			_hrtimer_next_first(header, first);
-			_RBTree_Extract(&header->tree, &first->node);
-			_hrtimer_set_state(first, HRTIMER_INACTIVE);
-			routine = first->routine;
-			// _ISR_lock_Release_and_ISR_enable(lock, lock_context);
-			(*routine)(first);
-			// _ISR_lock_ISR_disable_and_acquire(lock, lock_context);
-		} else {
-			break;
-		}
+#else
 
-		first = _hrtimer_first(header);
-	} while (first != NULL);
-}
-
-#else /* !USE_HRTIMER_SOURCE_CODE */
-int _hrtimer_insert(struct hrtimer_context *header, struct hrtimer *timer,
-	uint64_t expire);
-void _hrtimer_remove(struct hrtimer_context *header, struct hrtimer *timer);
-void _hrtimer_expire(struct hrtimer_context *header, struct hrtimer *first, 
-	uint64_t now);
-#endif /* USE_HRTIMER_SOURCE_CODE */
-
+void hrtimer_init(struct hrtimer *timer);
+int  hrtimer_stop(struct hrtimer *timer);
+int  hrtimer_start(struct hrtimer *timer, uint64_t expire);
+#endif /* HRTIMER_SOURCE_CODE */
 
 #ifdef __cplusplus
 }

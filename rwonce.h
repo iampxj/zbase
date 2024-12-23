@@ -26,6 +26,8 @@
 // #include <linux/kasan-checks.h>
 // #include <linux/kcsan-checks.h>
 
+
+#ifndef __cplusplus
 /*
  * Yes, this permits 64-bit accesses on 32-bit architectures. These will
  * actually be atomic in some cases (namely Armv7 + LPAE), but for others we
@@ -60,6 +62,12 @@ do {									\
 	rte_compiletime_assert_rwonce_type(x);				\
 	__RTE_WRITE_ONCE(x, val);						\
 } while (0)
+
+#else /* __cplusplus */
+
+#define RTE_READ_ONCE(x) (x)
+#define RTE_WRITE_ONCE(x, val) (x) = (val)
+#endif /* !__cplusplus */
 
 #endif /* __ASSEMBLY__ */
 #endif	/* BASEWORK_GENERIC_RWONCE_H_ */

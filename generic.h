@@ -208,7 +208,24 @@
  */
 #define RTE_BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
 
-#define RTE_FOR16_EXECUTE(_n,  _exec_cmd) \
+#define RTE_UNROLL8_EXEC(_n,  _exec_cmd) \
+do {                                      \
+	long __n = (long)_n;                  \
+    long __nc = rte_div_roundup(__n, 8); \
+    switch ((__n) & 7) {                 \
+    case 0: do {    _exec_cmd             \
+    case 7:         _exec_cmd             \
+    case 6:         _exec_cmd             \
+    case 5:         _exec_cmd             \
+    case 4:         _exec_cmd             \
+    case 3:         _exec_cmd             \
+    case 2:         _exec_cmd             \
+    case 1:         _exec_cmd             \
+            } while (--__nc > 0);         \
+    }                                     \
+} while (0)
+
+#define RTE_UNROLL16_EXEC(_n,  _exec_cmd) \
 do {                                      \
 	long __n = (long)_n;                  \
     long __nc = rte_div_roundup(__n, 16); \

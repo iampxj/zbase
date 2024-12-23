@@ -398,7 +398,7 @@ static inline void rte_list_splice_tail_init(struct rte_list *list,
  * @member:	the name of the rte_list within the struct.
  */
 #define rte_list_entry(ptr, type, member) \
-	container_of(ptr, type, member)
+	rte_container_of(ptr, type, member)
 
 /**
  * rte_list_first_entry - get the first element from a list

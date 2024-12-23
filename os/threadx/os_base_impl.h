@@ -21,7 +21,7 @@ extern "C"{
 #define TX_CALLERR(fn, arg...) 0 - (int)fn(arg) 
 
 #define os_in_isr()
-#define os_panic(...)
+#define os_panic(...) TX_SYSTEM_PANIC()
 
 /* Critical lock */
 #define os_critical_global_declare
@@ -121,7 +121,7 @@ _os_thread_getaffinity(os_thread_t *thread, size_t cpusetsize,
 
 OS_THREAD_API int 
 _os_thread_sleep(uint32_t ms) {
-    return TX_CALLERR(_tx_thread_sleep, TX_MSEC(ms));
+    return TX_CALLERR(tx_thread_sleep, TX_MSEC(ms));
 }
 
 OS_THREAD_API void 
