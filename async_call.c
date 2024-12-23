@@ -17,6 +17,22 @@ static void rq_async_execute(void *arg, size_t size) {
         cp->done(cp);
 }
 
+int __async_call0(async_fn_t fn, bool urgent) {
+    if (fn == NULL)
+        return -EINVAL;
+    if (urgent)
+        return rq_submit_urgent((void (*)(void *))(void *)fn, NULL);
+    return rq_submit((void (*)(void *))(void *)fn, NULL);
+}
+
+int __async_call1(async_fn_t fn, uintptr_t a1, bool urgent) {
+    if (fn == NULL)
+        return -EINVAL;
+    if (urgent)
+        return rq_submit_urgent((void (*)(void *))(void *)fn, (void *)a1);
+    return rq_submit((void (*)(void *))(void *)fn, (void *)a1);
+}
+
 int __async_call(async_fn_t fn, uintptr_t a1, uintptr_t a2, 
     uintptr_t a3, uintptr_t a4, uintptr_t a5, async_done_t done, bool urgent) {
     struct call_param param;

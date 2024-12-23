@@ -29,6 +29,29 @@ struct call_param {
 };
 
 /*
+ * Async-Call template
+ * Optimized for arguments less than 2
+ */
+#define async_call(...) \
+    _ASYNC_CALL_TEMPLATE(\
+        _ignore, \
+        ##__VA_ARGS__, \
+        _ASYNC_CALL5, \
+        _ASYNC_CALL4, \
+        _ASYNC_CALL3, \
+        _ASYNC_CALL2, \
+        _ASYNC_CALL1, \
+        _ASYNC_CALL0)(__VA_ARGS__)
+        
+#define _ASYNC_CALL0(fn) __async_call0((async_fn_t)fn, false)
+#define _ASYNC_CALL1(fn, a1) __async_call1((async_fn_t)fn, (uintptr_t)a1, false)
+#define _ASYNC_CALL2(fn, a1, a2) async_call2(fn, a1, a2)
+#define _ASYNC_CALL3(fn, a1, a2, a3) async_call3(fn, a1, a2, a3)
+#define _ASYNC_CALL4(fn, a1, a2, a3, a4) async_call4(fn, a1, a2, a4)
+#define _ASYNC_CALL5(fn, a1, a2, a3, a4, a5) async_call5(fn, a1, a2, a4, a5)
+#define _ASYNC_CALL_TEMPLATE(_ignore, a0, a1, a2, a3, a4, a5, _p, ...) _p
+
+/*
  * Async-call api without done
  */
 #define async_call0(_fn) \
@@ -91,7 +114,8 @@ struct call_param {
         (uintptr_t)(_a5), \
         _done, false)
 
-
+int __async_call0(async_fn_t fn, bool urgent);
+int __async_call1(async_fn_t fn, uintptr_t a1, bool urgent);
 int __async_call(async_fn_t fn, uintptr_t a1, uintptr_t a2, 
     uintptr_t a3, uintptr_t a4, uintptr_t a5, async_done_t done, bool urgent);
 
