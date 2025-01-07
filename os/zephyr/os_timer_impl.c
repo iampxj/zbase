@@ -32,7 +32,6 @@
 #define HRTIMER_MS(n) (s32_t)((n) * 1000)
 
 struct os_timer {
-#define OS_TIMER_DELETED 0x1
     union {
         struct hrtimer timer;
         struct timer_list l_timer;
@@ -41,26 +40,14 @@ struct os_timer {
 #ifdef CONFIG_TIMER_MERGE
     void *pfn;
     void *parg;
-    atomic_t slave;
+    bool slave;
 #endif
-    atomic_t rflags;
+    bool deleted;
     void *pnode;
-#ifdef CONFIG_OS_TIMER_TRACER
-    bool trace;
-#endif
 };
 
-#ifdef CONFIG_OS_TIMER_TRACER
-#define PR_TRACE(_timer, _fmt, ...) \
-    do { \
-        if ((_timer)->trace) \
-            pr_notice(_fmt, ##__VA_ARGS__); \
-    } while (0)
-#else
-#define PR_TRACE(_timer, _fmt, ...) \
-    pr_dbg(_fmt, ##__VA_ARGS__); 
-
-#endif /* CONFIG_OS_TIMER_TRACER */
+#define PR_TRACE(...)
+#define TIMER_DELETED(p) (*(void **)(p) == NULL)
 
 #ifdef CONFIG_TIMER_MERGE
 static struct hrtimer slave_timer;
@@ -75,11 +62,16 @@ static void timer_task_wrapper(void *arg) {
     struct os_timer *timer = arg;
     PR_TRACE(timer, "timer task call: %p timer->task(%p) arg(%p)\n", 
         timer, timer->task, arg);
+
     assert(timer->task != NULL);
-    if (unlikely(atomic_test_bit(&timer->rflags, OS_TIMER_DELETED))) {
+    unsigned int key = irq_lock();
+    if (unlikely(timer->deleted)) {
+        irq_unlock(key);
         pr_dbg("The timer has been deleted (callback: %p)\n", timer->task);
         return;
     }
+    irq_unlock(key);
+
     rq_set_executing(timer->task);
 #ifdef CONFIG_TIMER_MERGE
     timer->task(timer, timer->parg);
@@ -105,49 +97,29 @@ static void timer_slave_cb(struct hrtimer *timer,
 }
 
 static void timer_slave_start(struct os_timer *p, long expires) {
-    if (!(expires % SLAVE_TIMER_RES)) {
-        if (unlikely(atomic_cas(&p->slave, 0, 1))) {
-            pr_dbg("initialize slave timer\n");
+    if (expires % SLAVE_TIMER_RES == 0) {
+        if (unlikely(!p->slave)) {
+            p->slave = true;
             hrtimer_stop(&p->timer);
-            /* Not ISR context */
-            if (p->task) {
-                timer_init(&p->l_timer, 
-                    (void *)timeout_adaptor, p->parg);
-                pr_dbg("%s: no isr p->task(%p) p->pfn(%p) p->parg(%p)\n", 
-                    __func__, p->task, p->pfn, p->parg);
-            } else {
-                timer_init(&p->l_timer, p->pfn, p->parg);
-                pr_dbg("%s: p->task(%p) p->pfn(%p) p->parg(%p)\n", 
-                    __func__, p->task, p->pfn, p->parg);
-            }
-
+            timer_init(&p->l_timer, p->task? (void*)timeout_adaptor: p->pfn, p->parg);
             timer_add(&p->l_timer, expires);
-        } else {
+        } else
             timer_mod(&p->l_timer, expires);
-        }
-        
     } else {
-        if (unlikely(atomic_cas(&p->slave, 1, 0))) {
+        if (unlikely(p->slave)) {
+            p->slave = false;
             timer_del(&p->l_timer);
-            if (p->task)
-                hrtimer_init(&p->timer, 
-                    (hrtimer_expiry_t)timeout_adaptor, p->parg);
-            else
-                hrtimer_init(&p->timer, 
-                    (hrtimer_expiry_t)p->pfn, p->parg);
+            hrtimer_init(&p->timer, p->task? (hrtimer_expiry_t)timeout_adaptor: (hrtimer_expiry_t)p->pfn, p->parg);
         }
         hrtimer_start(&p->timer, HRTIMER_MS(expires), 0);
     }
-    PR_TRACE(p, "%s timer(%p) exipres(%ld) task(%p)\n", 
-        __func__, p, expires, p->task);
 }
 
 static void timer_slave_del(struct os_timer *p) {
-    if (atomic_cas(&p->slave, 1, 0)) {
+    if (p->slave)
         timer_del(&p->l_timer);
-    } else {
+    else
         hrtimer_stop(&p->timer);
-    }
 }
 #endif /* CONFIG_TIMER_MERGE */
 
@@ -188,13 +160,16 @@ int __os_timer_mod(os_timer_t timer, long expires) {
     if (p == NULL)
         return -EINVAL;
 
-    atomic_clear(&p->rflags);
+    unsigned int key = irq_lock();
+    p->deleted = false;
 #ifdef CONFIG_TIMER_MERGE
     /* if timer need to be merged */
     timer_slave_start(p, expires);
 #else    
     hrtimer_start(&p->timer, HRTIMER_MS(expires), 0);
 #endif /* CONFIG_TIMER_MERGE */
+    irq_unlock(key);
+
     return 0;
 }
 
@@ -202,33 +177,42 @@ int __os_timer_add(os_timer_t timer, long expires) {
     struct os_timer *p = timer;
     if (p == NULL)
         return -EINVAL;
-    atomic_clear(&p->rflags);
+    
+    unsigned int key = irq_lock();
+    p->deleted = false;
 #ifdef CONFIG_TIMER_MERGE
     /* if timer need to be merged */
     timer_slave_start(p, expires);
 #else   
     hrtimer_start(&p->timer, HRTIMER_MS(expires), 0);
 #endif
+    irq_unlock(key);
+
     return 0;
 }
 
 int __os_timer_del(os_timer_t timer) {
     struct os_timer *p = timer;
+
     if (p == NULL)
         return -EINVAL;
-    if (atomic_cas(&p->rflags, 0, OS_TIMER_DELETED)) {
+
+    unsigned int key = irq_lock();
+    if (!p->deleted) {
+        p->deleted = true;
         if (p->pnode) {
             _rq_node_delete(_system_rq, (struct rq_node *)p->pnode);
             p->pnode = NULL;
         }
-        PR_TRACE(p, "timer(%p) timer->task(%p) delete caller(%p): %p\n", 
-            p, p->task, __builtin_return_address(0));
+
 #ifdef CONFIG_TIMER_MERGE
         timer_slave_del(p);
 #else
         hrtimer_stop(&p->timer);
 #endif
     }
+    irq_unlock(key);
+
     return 0;
 }
 
@@ -256,12 +240,16 @@ int __os_timer_update_handler(os_timer_t timer,
 int __os_timer_destroy(os_timer_t timer) {
     assert(timer != NULL);
     struct os_timer *p = timer;
+
 #ifdef CONFIG_TIMER_MERGE
+    unsigned int key = irq_lock();
     timer_slave_del(p);
+    irq_unlock(key);
 #else
     hrtimer_stop(&p->timer);
 #endif
     os_obj_free(&timer_robj, p);
+
     return 0;
 }
 

@@ -27,6 +27,15 @@ static const char *regulatory_keys[] = {
     NULL
 };
 
+static const char *logo_keys[] = {
+    "X",
+    "Y",
+    "Type",
+    "AnimTime",
+    "AnimTimes",
+    NULL
+};
+
 static const char *
 get_string(cJSON *js, const char *s) {
     cJSON *obj = cJSON_GetObjectItemCaseSensitive(js, s);
@@ -35,12 +44,20 @@ get_string(cJSON *js, const char *s) {
     return NULL;
 }
 
-static void load_params(cJSON *obj, const char *keys[]) {
+static void load_params(cJSON *obj, const char *keys[], const char *prefix) {
     for (int i = 0; keys[i] != NULL; i++) {
         const char *ps = get_string(obj, keys[i]);
         if (ps) {
-            pr_notice("%s -> %s\n", keys[i], ps);
-            rte_setenv(keys[i], ps, 1);
+            if (prefix) {
+                char keyname[128];
+                size_t offset = strlcpy(keyname, prefix, sizeof(keyname));
+                strlcpy(&keyname[offset], keys[i], sizeof(keyname) - offset);
+                pr_notice("%s -> %s\n", keyname, ps);
+                rte_setenv(keyname, ps, 1);
+            } else {
+                pr_notice("%s -> %s\n", keys[i], ps);
+                rte_setenv(keys[i], ps, 1);
+            }
         }
     }
 }
@@ -69,8 +86,9 @@ static void load_language_params(cJSON *env) {
 }
 
 int fw_load_pararm(const char *buffer) {
-    cJSON *root, *env, *regulatory;
-    int err;
+    cJSON *root, *env;
+    cJSON *logo, *regulatory;
+    int err = -EINVAL;
 
     cJSON_Init();
     root = cJSON_Parse(buffer);
@@ -86,16 +104,25 @@ int fw_load_pararm(const char *buffer) {
         err = -ENODATA;
         goto _failed;
     }
-    load_params(env, env_keys);
+    load_params(env, env_keys, NULL);
     load_language_params(env);
 
     regulatory = cJSON_GetObjectItemCaseSensitive(env, "Regulatory");
-    if (env == NULL) {
+    if (regulatory == NULL) {
         pr_err("Not found node \"Regulatory\"\n");
         err = -ENODATA;
         goto _failed;
     }
-    load_params(regulatory, regulatory_keys);
+    load_params(regulatory, regulatory_keys, "Regulatory");
+
+    logo = cJSON_GetObjectItemCaseSensitive(env, "Logo");
+    if (logo == NULL) {
+        pr_err("Not found node \"Logo\"\n");
+        err = -ENODATA;
+        goto _failed;
+    }
+    load_params(logo, logo_keys, "Logo");
+
 _failed:
     cJSON_Delete(root);
     return err;
