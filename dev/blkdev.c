@@ -133,7 +133,7 @@ blkdev_sync_locked(struct block_device *bdev, long expired,
         bh_enqueue_cached(bdev, bh);
     }
 
-    return 0;
+    return err;
 }
 
 static int 
@@ -407,13 +407,12 @@ simple_blkdev_print(void) {
         struct block_device *bdev = rte_container_of(pos, 
             struct block_device, link);
         struct bh_statitics *stat = &bdev->stat;
-
+        
         pr_out("\n=========== %s Statistics ==========\n", 
             disk_device_get_name(bdev->dd));
-        pr_out("Cache Hits: %ld\nCache Missed: %ld\nCache Hit-Rate: %ld%%\n\n",
+        pr_out("Cache Hits: %ld\nCache Missed: %ld\n\n",
             stat->cache_hits,
-            stat->cache_missed,
-            (stat->cache_hits * 100) / (stat->cache_hits + stat->cache_missed)
+            stat->cache_missed
         );
     }
 }
