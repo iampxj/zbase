@@ -27,6 +27,7 @@ if (NOT WINDOWS)
         # ${CMAKE_CURRENT_SOURCE_DIR}/fifofs_test.cc
         ${CMAKE_CURRENT_SOURCE_DIR}/idr_test.cc
         ${CMAKE_CURRENT_SOURCE_DIR}/libenv_test.cc
+        ${CMAKE_CURRENT_SOURCE_DIR}/flash_kv_test.cc
     )
 endif()
 
