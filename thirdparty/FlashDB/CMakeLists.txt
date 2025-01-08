@@ -13,4 +13,5 @@ zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/fdb_tsdb.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/fdb_utils.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/fdb.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/nvram_kv.c
 )

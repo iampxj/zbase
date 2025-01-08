@@ -49,4 +49,8 @@ config CJSON
     bool "Enable cJson library"
     default y
 
+config FLASHDB
+    bool "Enable key-value based nvram"
+    default y
+
 endmenu
