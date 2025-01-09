@@ -11,7 +11,6 @@ zephyr_library_sources(
     ${CMAKE_CURRENT_SOURCE_DIR}/partition_usr_cfg.c
     ${CMAKE_CURRENT_SOURCE_DIR}/gpt.c
     ${CMAKE_CURRENT_SOURCE_DIR}/buffer_io.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/rte_timer.c
     ${CMAKE_CURRENT_SOURCE_DIR}/fifofs.c
 )
 
