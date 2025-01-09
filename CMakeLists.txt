@@ -42,7 +42,6 @@ zephyr_library_sources_ifndef(CONFIG_BOOTLOADER
 
 if (NOT CONFIG_BOOTLOADER)
 zephyr_library_sources(
-    modmgr.c
 	system.c
     module.c
     idr.c
