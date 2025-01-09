@@ -17,6 +17,9 @@ zephyr_library_sources(
     os_bus.c
     os_param.c
 )
+zephyr_library_sources_ifdef(CONFIG_FLASHDB
+    os_flashkv.c
+)
 zephyr_library_sources_ifdef(CONFIG_BCACHE
     os_bcachedev.c
 )

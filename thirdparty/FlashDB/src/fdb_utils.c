@@ -19,6 +19,12 @@
 
 #define FDB_LOG_TAG "[utils]"
 
+#ifdef FDB_DEBUG_ON
+#define DLOG FDB_PRINT
+#else
+#define DLOG(...)
+#endif
+
 static const uint32_t crc32_table[] =
 {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -268,7 +274,9 @@ fdb_err_t _fdb_flash_read(fdb_db_t db, uint32_t addr, void *buf, size_t size)
     } else {
 #ifdef FDB_USING_FAL_MODE
         long ofs = db->storage.part->offset + addr;
-        if (disk_device_read(db->storage.f_part.dev, buf, size, ofs) < 0) {
+        DLOG("@FlashDB-Read(%s): ofs(0x%x) size(%d)\n", 
+            disk_device_get_name(db->storage.f_part.dev), ofs, size);
+        if (blkdev_read(db->storage.f_part.dev, buf, size, ofs) < 0) {
             result = FDB_READ_ERR;
         }
 #endif
@@ -289,11 +297,13 @@ fdb_err_t _fdb_flash_erase(fdb_db_t db, uint32_t addr, size_t size)
 #endif /* FDB_USING_FILE_MODE */
     } else {
 #ifdef FDB_USING_FAL_MODE
-        long ofs = db->storage.part->offset + addr;
-        FDB_ASSERT(addr + size <= db->storage.part->len);
-        if (disk_device_erase(db->storage.f_part.dev, ofs, size) < 0) {
-            result = FDB_ERASE_ERR;
-        }
+        // long ofs = db->storage.part->offset + addr;
+        // DLOG("@FlashDB-Erase(%s): ofs(0x%x) size(%d)\n", 
+        //     disk_device_get_name(db->storage.f_part.dev), ofs, size);
+        // FDB_ASSERT(addr + size <= db->storage.part->len);
+        // if (disk_device_erase(db->storage.f_part.dev, ofs, size) < 0) {
+        //     result = FDB_ERASE_ERR;
+        // }
 #endif
     }
 
@@ -313,8 +323,10 @@ fdb_err_t _fdb_flash_write(fdb_db_t db, uint32_t addr, const void *buf, size_t s
     } else {
 #ifdef FDB_USING_FAL_MODE
         long ofs = db->storage.part->offset + addr;
+        DLOG("@FlashDB-Write(%s): ofs(0x%x) size(%d)\n", 
+            disk_device_get_name(db->storage.f_part.dev), ofs, size);
         FDB_ASSERT(addr + size <= db->storage.part->len);
-        if (disk_device_write(db->storage.f_part.dev, buf, size, ofs) < 0) {
+        if (blkdev_write(db->storage.f_part.dev, buf, size, ofs) < 0) {
             result = FDB_WRITE_ERR;
         }
 #endif

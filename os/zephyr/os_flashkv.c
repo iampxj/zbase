@@ -34,20 +34,20 @@ int _nvram_kv_init(const char *name, int file_id, const char *path) {
 
             dpart.name = "nvram";
             dpart.offset = parti->offset;
-            dpart.len = parti->len;
+            dpart.len = parti->size;
 
             switch (parti->storage_id) {
             case STORAGE_ID_NOR:
                 err = disk_device_open("spi_flash", 
-                    &nvram_db.parent.storage.f_part.dev);
+                    &_nvram_db->parent.storage.f_part.dev);
                 break;
             case STORAGE_ID_NAND:
                 err = disk_device_open("spinand", 
-                    &nvram_db.parent.storage.f_part.dev);
+                    &_nvram_db->parent.storage.f_part.dev);
                 break;
             case STORAGE_ID_DATA_NOR:
                 err = disk_device_open("spi_flash_2", 
-                    &nvram_db.parent.storage.f_part.dev);
+                    &_nvram_db->parent.storage.f_part.dev);
                 break;
             default:
                 rte_assert0(0);

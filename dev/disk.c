@@ -34,16 +34,24 @@ struct disk_device *disk_device_next(struct disk_device *dd) {
     return SLIST_FIRST(&disk_head);
 }
 
-int disk_device_open(const char *name, struct disk_device **dd) {
+struct disk_device *disk_device_find(const char *name) {
     struct disk_device *pd;
-    rte_assert(dd != NULL);
-    DISK_FOREACH(pd) {
-        if (!strcmp(disk_get_name(pd), name)) {
-            *dd = pd;
-            return 0;
+    if (name != NULL) {
+        DISK_FOREACH(pd) {
+            if (!strcmp(disk_get_name(pd), name))
+                return pd;
         }
     }
-    return -ENODEV;
+    return NULL;
+}
+
+int disk_device_open(const char *name, struct disk_device **dd) {
+    rte_assert(dd != NULL);
+    *dd = disk_device_find(name);
+    if (*dd == NULL)
+        return -ENODEV;
+
+    return 0;
 }
 
 int disk_device_close(struct disk_device *dd) {

@@ -5,6 +5,7 @@
  */
 
 #include <errno.h>
+#include <sys/types.h>
 
 #include "basework/thirdparty/FlashDB/flashdb.h"
 
@@ -37,4 +38,10 @@ int _nvram_kv_del(fdb_kvdb_t db, const char *key) {
         return -EINVAL;
 
     return -(int)fdb_kv_del(db, key);
+}
+
+int _nvram_kv_sync(fdb_kvdb_t db) {
+    (void) db;
+    blkdev_sync();
+    return 0;
 }

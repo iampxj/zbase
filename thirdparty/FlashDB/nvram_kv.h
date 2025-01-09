@@ -48,6 +48,14 @@ ssize_t _nvram_kv_get(struct fdb_kvdb *db, const char *key, char *buf,
  */
 int _nvram_kv_del(struct fdb_kvdb *db, const char *key);
 
+/*
+ * _nvram_kv_sync - Flush cache data to storage media
+ *
+ * @db  Pointer to nvram context
+ *
+ * return 0 if success
+ */
+int _nvram_kv_sync(struct fdb_kvdb *db);
 
 extern char _nvram_db_default;
 
@@ -64,6 +72,11 @@ nvram_kv_get(const char *key, char *buf, size_t maxlen) {
 static inline int 
 nvram_kv_del(const char *key) {
     return _nvram_kv_del((struct fdb_kvdb *)&_nvram_db_default, key);
+}
+
+static inline int 
+nvram_kv_sync(void) {
+    return _nvram_kv_sync((struct fdb_kvdb *)&_nvram_db_default);
 }
 
 #ifdef __cplusplus

@@ -379,7 +379,7 @@ static int platform_flash_erase(device_t dd, long offset, size_t size) {
 static int __rte_notrace platform_flash_ioctl(device_t dd, long cmd, void *arg) {
     (void) arg;
     if (cmd == DISK_SYNC) {
-        (void)flash_flush(dd);
+        (void)flash_flush(dd, 0);
         return 0;
     }
     return -EINVAL;

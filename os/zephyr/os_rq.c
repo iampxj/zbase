@@ -104,7 +104,7 @@ void _rq_execute_post(struct rq_context *rq) {
 
     if (diff_us > CRITICAL_TIME) {
         printk("** run-queue cost time(%u us); schedule-func(%p)\n", 
-            delta, rq_current_executing());
+            diff_us, rq_current_executing());
     }
 #endif
     sys_wake_unlock_ext(PARTIAL_WAKE_LOCK, 

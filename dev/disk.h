@@ -40,6 +40,7 @@ struct disk_device {
 #define DISK_SYNC        0x12
 
 struct disk_device *disk_device_next(struct disk_device *dd);
+struct disk_device *disk_device_find(const char *name);
 int disk_device_open(const char *name, struct disk_device **dd);
 int disk_device_close(struct disk_device *dd);
 int disk_device_write(struct disk_device *dd, const void *buf, size_t size, long offset);

@@ -67,6 +67,19 @@ gpt_find(const char *name) {
     return NULL;
 }
 
+const struct gpt_entry*
+gpt_find_by_filename(const char *fname) {
+    rte_assert(gp_table != NULL);
+    if (fname == NULL)
+        return NULL;
+    
+    for (size_t i = 0; i < gp_table->count; i++) {
+        if (!strcmp(fname, gp_table->gps[i].fname))
+            return gp_table->gps + i;
+    }
+    return NULL;
+}
+
 void gpt_destroy(void) {
     if (gp_table) {
         general_free(gp_table);
@@ -219,6 +232,7 @@ int gpt_load(const char *buffer) {
         cJSON_ArrayForEach(pte_obj, pte) {
             const char *label = get_string(pte_obj, "label");
             const char *parent = get_string(obj, "name");
+            const char *bin = get_string(pte_obj, "bin");
             uint32_t idx = gp_new->count;
 
             if (label == NULL) {
@@ -246,6 +260,11 @@ int gpt_load(const char *buffer) {
 
             strlcpy(gp_new->gps[idx].parent, storage, 
                 field_size(struct gpt_entry, parent));
+
+            if (bin) {
+                strlcpy(gp_new->gps[idx].fname, bin, 
+                    field_size(struct gpt_entry, fname));
+            }
 
             gp_new->count = idx + 1;
         }

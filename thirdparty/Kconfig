@@ -51,6 +51,6 @@ config CJSON
 
 config FLASHDB
     bool "Enable key-value based nvram"
-    default y
+    default n
 
 endmenu

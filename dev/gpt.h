@@ -15,6 +15,7 @@ typedef void (*gpt_updated_cb)(void);
 struct gpt_entry {
     char     name[32];
     char     parent[16];
+    char     fname[36];
     uint32_t offset;
     uint32_t size;
 };
@@ -39,6 +40,14 @@ void gpt_destroy(void);
  * return entry if success
  */
 const struct gpt_entry *gpt_find(const char *name);
+
+/*
+ * gpt_find_by_filename - Find partition entry by file name
+ *
+ * @name parition file name
+ * return entry if success
+ */
+const struct gpt_entry* gpt_find_by_filename(const char *fname);
 
 /*
  * gpt_dump - Dump parition information

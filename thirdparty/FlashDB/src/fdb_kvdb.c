@@ -17,6 +17,12 @@
 #include "basework/thirdparty/FlashDB/flashdb.h"
 #include <fdb_low_lvl.h>
 
+#ifndef PRIuLEAST16
+#define PRIuLEAST16 "u"
+#endif
+#ifndef PRIdLEAST16
+#define PRIdLEAST16 "d"
+#endif
 #define FDB_LOG_TAG "[kv]"
 /* rewrite log prefix */
 #undef  FDB_LOG_PREFIX2

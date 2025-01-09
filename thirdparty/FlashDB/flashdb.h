@@ -21,7 +21,7 @@
 #include "basework/thirdparty/FlashDB/inc/fdb_cfg.h"
 
 #ifdef FDB_USING_FAL_MODE
-#include "basework/dev/disk.h"
+#include "basework/dev/blkdev.h"
 #include "basework/dev/partition.h"
 #endif
 

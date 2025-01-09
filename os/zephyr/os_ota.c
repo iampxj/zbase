@@ -170,54 +170,21 @@ static uint32_t crc32_calc(const uint8_t *data, size_t len) {
     return crc32_update(0, data, len);
 }
 
-static int partition_get_fid(const char *fname) {
-    int fid;
-
-    if (!strcmp(fname, "res+.bin"))
-        fid = 14;
-    else if (!strcmp(fname, "fonts+.bin"))
-        fid = 15;
-    else
-        fid = -1;
-    return fid;
-}
-
-static void *partition_get_fd(struct file_partition *dev, const char *name) {
-    const struct partition_entry *pe;
-    const struct disk_partition *dp;
-    int fid;
-
-    fid = partition_get_fid(name);
-    if (fid < 0)
-        return NULL;
-
-    pe = ota_partition_get(STORAGE_ID_NOR, fid);
-    if (pe == NULL || pe->offset == UINT32_MAX)
-        return NULL;
-
-    dp = disk_partition_find("firmware");
-    rte_assert(dp != NULL);
-    dev->dd = disk_device_find_by_part(dp);
-    dev->offset = dp->offset;
-    dev->len = pe->size;
-    dev->name = name;
-    pr_dbg("open %s partition: start(0x%x) size(%d)\n", 
-        name, dp->offset, dp->len);
-    return dev;
-}
-
 static int
-gpt_get_entry(const char *name, struct file_partition *fpt) {
+file_partition_get_from_gpt(const char *name, struct file_partition *fpt) {
     const struct gpt_entry *gpe;
-
-    gpe = gpt_find("picture");
-    rte_assert(gpe != NULL);
-    disk_device_open(gpe->parent, &fpt->dd);
-    rte_assert(fpt->dd != NULL);
-    fpt->offset = gpe->offset;
-    fpt->len = gpe->size;
-    fpt->name = name;
-    return 0;
+    gpe = gpt_find_by_filename(name);
+    if (gpe) {
+        fpt->dd = disk_device_find(gpe->parent);
+        rte_assert(fpt->dd != NULL);
+        pr_dbg("Opened %s partition: start(0x%x) size(%d)\n", 
+            gpe->name, file_dev.offset, file_dev.len);
+        fpt->offset = gpe->offset;
+        fpt->len = gpe->size;
+        fpt->name = name;
+        return 0;
+    }
+    return -ENODATA;
 }
 
 static int extract_addr(const char *str, uint32_t *addr) {
@@ -359,56 +326,13 @@ static int generate_ota_log(const struct disk_partition *dp,
 static struct file_partition *
 __partition_open(const char *name, size_t fsize) {
     const struct partition_entry *parti;
-    const struct gpt_entry *gpe;
 
-    disk_device_open(OTA_STORAGE_MEDIA, &file_dev.dd);
+    file_dev.dd = disk_device_find(OTA_STORAGE_MEDIA);
     rte_assert(file_dev.dd != NULL);
 
-    /* Picture resource partition */
-    if (!strcmp(name, "res.bin")) {
-        gpt_get_entry("picture", &file_dev);
-        pr_dbg("open picture partition: start(0x%x) size(%d)\n", 
-            file_dev.offset, file_dev.len);
+    /* Just only for json parition(the sub-parition table) */
+    if (!file_partition_get_from_gpt(name, &file_dev))
         return &file_dev;
-    }
-	
-    /* Picture resource ext-partition */
-    if (!strcmp(name, "res_ext.bin")) {
-        gpt_get_entry("picture_ext", &file_dev);
-        pr_dbg("open picture extension partition: start(0x%x) size(%d)\n", 
-            file_dev.offset, file_dev.len);
-        return &file_dev;
-    }
-
-    /* Font resource partition */
-    if (!strcmp(name, "fonts.bin")) {
-        gpt_get_entry("font", &file_dev);
-        pr_dbg("open fonts partition: start(0x%x) size(%d)\n", 
-            file_dev.offset, file_dev.len);
-        return &file_dev;
-    }
-
-    /* Default Dial */
-    if (!strcmp(name, "dial.bin")) {
-        gpt_get_entry("watchface", &file_dev);
-        pr_dbg("open udisk partition: start(0x%x) size(%d)\n", 
-            file_dev.offset, file_dev.len);
-        return &file_dev;
-    }
-
-    if (!strcmp(name, "res+.bin")) {
-        gpt_get_entry("picture+", &file_dev);
-        pr_dbg("open picture increase: start(0x%x) size(%d)\n", 
-            file_dev.offset, file_dev.len);
-        return &file_dev;
-    }
-
-    if (!strcmp(name, "fonts+.bin")) {
-        gpt_get_entry("font+", &file_dev);
-        pr_dbg("open font increase: start(0x%x) size(%d)\n", 
-            file_dev.offset, file_dev.len);
-        return &file_dev;
-    }
 
     if (!fnmatch("0x*.bin", name, FNM_CASEFOLD)) {
         uint32_t start;
@@ -459,8 +383,7 @@ __partition_open(const char *name, size_t fsize) {
     }
 
     if (!strcmp(name, "gpt.bin")) {
-        pr_dbg("open gpt partition: start(0x%x) size(%d)\n", 
-            parti->offset, parti->size);
+        pr_dbg("*** open gpt partition ***\n");
         ota_fstream_set_ops(&ram_fstream_ops);
         return ram_fstream_ops.open(name, fsize);
     }
@@ -732,7 +655,7 @@ static void ram_partition_completed(int err, void *fp, const char *fname,
      */
     if (!strcmp(fname, "gpt.bin")) {
         struct ram_parition *rp = fp;
-        struct bin_header *bin = rp->buffer;
+        struct bin_header *bin = (struct bin_header *)rp->buffer;
 
         pr_info("checking gpt.bin and load it...\n");
         rte_assert0(bin->magic == FILE_HMAGIC);
