@@ -37,6 +37,7 @@
 #include "basework/utils/binmerge.h"
 #include "basework/lib/crc.h"
 #include "basework/lib/libenv.h"
+#include "basework/lib/string.h"
 
 #include "board_cfg.h"
 
@@ -359,11 +360,6 @@ SYS_INIT(os_early_platform_init, PRE_KERNEL_1, 1);
 /*
  * Platform Device
  */
-static const char *platform_flash_getname(device_t dev) {
-    const struct device *zdev = (const struct device *)dev;
-    return zdev->name;
-}
-
 static int platform_flash_read(device_t dd, void *buf, size_t size, long offset) {
     return flash_read(dd, offset, buf, size);
 }
@@ -420,6 +416,7 @@ static int __rte_unused __rte_notrace platform_flash_init(void) {
                 return -ENOMEM;
             }
 
+            strlcpy(dd->name, zdev->name, sizeof(dd->name));
             dd->dev = (void *)zdev;
             dd->addr = 0;
             dd->blk_size = layout->pages_size;
@@ -428,7 +425,6 @@ static int __rte_unused __rte_notrace platform_flash_init(void) {
             dd->write = platform_flash_write;
             dd->erase = platform_flash_erase;
             dd->ioctl = platform_flash_ioctl;
-            dd->get_name = platform_flash_getname;
             int err = disk_device_register(dd);
             if (err) {
                 pr_err("Register disk device failed: %d\n", err);

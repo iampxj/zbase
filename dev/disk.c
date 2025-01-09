@@ -23,11 +23,6 @@
 
 static SLIST_HEAD(disk_list, disk_device) disk_head;
 
-static inline const char *disk_get_name(struct disk_device *dd) {
-    rte_assert(dd->get_name != NULL);
-    return dd->get_name(dd->dev);
-}
-
 struct disk_device *disk_device_next(struct disk_device *dd) {
     if (dd != NULL)
         return SLIST_NEXT(dd, next);
@@ -38,7 +33,7 @@ struct disk_device *disk_device_find(const char *name) {
     struct disk_device *pd;
     if (name != NULL) {
         DISK_FOREACH(pd) {
-            if (!strcmp(disk_get_name(pd), name))
+            if (!strcmp(pd->name, name))
                 return pd;
         }
     }
@@ -162,8 +157,7 @@ int disk_device_register(struct disk_device *dd) {
     }
     if (dd->read == NULL || 
         dd->write == NULL || 
-        dd->erase == NULL || 
-        dd->get_name == NULL) {
+        dd->erase == NULL) {
         pr_err("no base operations\n");
         return -EINVAL;
     }

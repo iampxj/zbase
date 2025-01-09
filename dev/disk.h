@@ -17,6 +17,7 @@ extern "C"{
 struct disk_device {
     device_t dev;
     SLIST_ENTRY(disk_device) next;
+    char name[32];
 
     /* flash device start address and len  */
     uint32_t addr;
@@ -25,7 +26,6 @@ struct disk_device {
 
     void *bdev; /* Pointer to block device */
 
-    const char *(*get_name)(device_t dd);
     int (*read)(device_t dd, void *buf, size_t size, long offset);
     int (*write)(device_t dd, const void *buf, size_t size, long offset);
     int (*erase)(device_t dd, long offset, size_t size);
@@ -56,7 +56,7 @@ disk_device_get_block_size(const struct disk_device *dd) {
 
 static inline const char * 
 disk_device_get_name(const struct disk_device *dd) {
-    return dd->get_name(dd->dev);
+    return dd->name;
 }
 
 #ifdef __cplusplus

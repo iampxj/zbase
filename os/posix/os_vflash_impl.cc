@@ -19,11 +19,6 @@ extern "C" int platform_bdev_register(struct disk_device *dd);
 
 static char virtual_flash_memory[FLASH_CAPACITY];
 
-static const char *virt_flash_get_name(device_t dd) {
-    (void) dd;
-    return FLASH_DEVNAME;
-}
-
 static int virtual_flash_read(device_t dd, void *buf, size_t size, long offset) {
     (void) dd;
     if (offset + size > FLASH_CAPACITY)
@@ -61,10 +56,10 @@ static int virtual_flash_ioctl(device_t dd, long cmd, void *arg) {
 
 CC_INIT(posix_vflash, kDeviceOrder, 10) {
     static struct disk_device vdisk;
+    strncpy(vdisk.name, FLASH_DEVNAME, sizeof(vdisk.name) - 1);
     vdisk.blk_size = FLASH_PGSZ;
     vdisk.len = FLASH_CAPACITY;
     vdisk.dev = (device_t)1;
-    vdisk.get_name = virt_flash_get_name;
     vdisk.read = virtual_flash_read;
     vdisk.write = virtual_flash_write;
     vdisk.erase = virtual_flash_erase;
