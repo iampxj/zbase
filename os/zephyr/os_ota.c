@@ -240,31 +240,26 @@ static int generate_ota_nlog(const struct disk_partition *dp,
     }
 
     /*
-     * Increase resource for picture
+     * The sub-parition files list
      */
-    gpe = gpt_find("res+.bin");
-    if (gpe != NULL) {
-        strlcpy(rec.nodes[idx].node.f_name, "res+.bin", MAX_NAMELEN);
-        strlcpy(rec.nodes[idx].d_device, gpe->parent, MAX_NAMELEN);
-        strlcpy(rec.nodes[idx].s_device, fw->parent, MAX_NAMELEN);
-        rec.nodes[idx].node.f_offset = gpe->offset;
-        rec.nodes[idx].node.f_size   = gpe->size;
-        idx++;
-    }
-    
-    /*
-     * Increase resource for font
-     */
-    gpe = gpt_find("fonts+.bin");
-    if (gpe != NULL) {
-        strlcpy(rec.nodes[idx].node.f_name, "fonts+.bin", MAX_NAMELEN);
-        strlcpy(rec.nodes[idx].d_device, gpe->parent, MAX_NAMELEN);
-        strlcpy(rec.nodes[idx].s_device, fw->parent, MAX_NAMELEN);
-        rec.nodes[idx].node.f_offset = gpe->offset;
-        rec.nodes[idx].node.f_size   = gpe->size;
-        idx++;
-    }
+    static const char *bin_array[] = {
+        "fwparam.bin", /* system parameters */
+        "res+.bin",    /* Increase resource for picture */
+        "fonts+.bin",  /* Increase resource for font */
+        NULL
+    };
 
+    for (int base = idx; idx < MAX_FWPACK_FILES && bin_array[idx - base]; idx++) {
+        gpe = gpt_find_by_filename(bin_array[idx - base]);
+        if (gpe != NULL) {
+            strlcpy(rec.nodes[idx].node.f_name, bin_array[idx - base], MAX_NAMELEN);
+            strlcpy(rec.nodes[idx].d_device, gpe->parent, MAX_NAMELEN);
+            strlcpy(rec.nodes[idx].s_device, fw->parent, MAX_NAMELEN);
+            rec.nodes[idx].node.f_offset = gpe->offset;
+            rec.nodes[idx].node.f_size   = gpe->size;
+        }
+    }
+  
     rte_assert0(idx <= MAX_FWPACK_FILES);
     rec.count = idx;
     rec.hcrc = crc32_calc((uint8_t *)&rec, sizeof(rec) - sizeof(uint32_t));
