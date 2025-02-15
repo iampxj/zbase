@@ -104,7 +104,7 @@ int  lazy_cache_decomp(const lv_img_dsc_t *src, lv_img_dsc_t *imgbuf, void *cont
  * @areas point to memory area
  * @n the number of memory area
  */
-void lazy_cache_aux_mempool_init(const struct aux_memarea *areas, size_t n);
+int lazy_cache_aux_mempool_init(const struct aux_memarea *areas, size_t n);
 
 /*
  * lazy_cache_aux_mempool_uninit - Destroy aux memory pool

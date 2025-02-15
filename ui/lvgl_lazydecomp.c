@@ -38,7 +38,6 @@
 	(char *)(((uintptr_t)p + size + align - 1) & ~(align - 1))
 #define ALIGNED_UP(v, a) (((v) + ((a) - 1)) & ~((a) - 1))
 
-
 struct image_node {
 	uint32_t         key;	 /* Picture offset address */
 	const void      *data;   /* Point to picture data */
@@ -79,6 +78,7 @@ struct lazy_cache {
 	uint8_t           invalid_pending;
 	uint8_t           cache_dirty;
 	char             *first_avalible;
+	int               aux_count;
 
 	/*
 	 * Main memory pool 
@@ -101,14 +101,16 @@ struct lazy_cache {
 static struct lazy_cache cache_controller;
 
 #ifdef CONFIG_LVGL_LAZYDECOMP_AUXMEM
-STATIC_INLINE void aux_mempool_reset(struct aux_mempool *aux) {
+STATIC_INLINE void 
+aux_mempool_reset(struct aux_mempool *aux) {
 	for (uint16_t i = 0; i < aux->count; i++)
 		aux->slots[i].freeptr = aux->slots[i].start;
 	aux->avalible_idx = 0;
 }
 #endif
 
-STATIC_INLINE void cache_mempool_init(struct cache_mempool *pool, void *area, 
+STATIC_INLINE void 
+cache_mempool_init(struct cache_mempool *pool, void *area, 
 	size_t size, void (*release)(void *p)) {		 
 	pool->area     = area;
 	pool->start    = ALIGNED_UP_ADD(area, 0, CACHE_ALIGNED);
@@ -117,7 +119,8 @@ STATIC_INLINE void cache_mempool_init(struct cache_mempool *pool, void *area,
 	pool->release  = release;
 }
 
-STATIC_INLINE void cache_mempool_uninit(struct cache_mempool *pool) {
+STATIC_INLINE void 
+cache_mempool_uninit(struct cache_mempool *pool) {
 	if (pool->area != NULL && pool->release != NULL) {
 		pool->release(pool->area);
 		pool->area    = NULL;
@@ -127,13 +130,13 @@ STATIC_INLINE void cache_mempool_uninit(struct cache_mempool *pool) {
 	}
 }
 
-STATIC_INLINE void *alloc_cache_buffer(struct lazy_cache *cache, size_t size, 
-	void ***phead) {
+STATIC_INLINE void *
+alloc_cache_buffer(struct lazy_cache *cache, size_t size, void ***phead) {
 	struct cache_mempool *pool = &cache->main_mempool;
 	void *p;
 
 	size = ALIGNED_UP(size, CACHE_ALIGNED);
-	
+
 	if (pool->end - pool->freeptr >= size) {
 		*phead = (void **)&pool->freeptr;
 		p = pool->freeptr;
@@ -454,10 +457,14 @@ int lazy_cache_renew(size_t size, void* (*alloc)(size_t)) {
 }
 
 #ifdef CONFIG_LVGL_LAZYDECOMP_AUXMEM
-void lazy_cache_aux_mempool_init(const struct aux_memarea *areas, size_t n) {
+int lazy_cache_aux_mempool_init(const struct aux_memarea *areas, size_t n) {
 	struct aux_mempool *aux = &cache_controller.aux_mempool;
 	size_t i;
 
+	if (areas == NULL || n == 0)
+		return -EINVAL;
+
+	lazy_cache_aux_mempool_uninit();
 	for (i = 0; i < n; i++) {
 		struct cache_mempool *p;
 		if (areas[i].area == NULL)
@@ -465,7 +472,7 @@ void lazy_cache_aux_mempool_init(const struct aux_memarea *areas, size_t n) {
 
 		p = &aux->slots[i];
 		p->area = areas[i].area;
-		p->start = ALIGNED_UP_ADD(p->area, 0, 64);
+		p->start = ALIGNED_UP_ADD(p->area, 0, CONFIG_LAZYCACHE_ALIGN_SIZE);
 		p->end = p->area + areas[i].size - 1;
 		p->freeptr = p->start;
 		p->release = areas[i].release;
@@ -473,23 +480,35 @@ void lazy_cache_aux_mempool_init(const struct aux_memarea *areas, size_t n) {
 
 	aux->count = (uint16_t)i;
 	aux->avalible_idx = 0;
+
+	cache_controller.aux_count++;
 }
 
 void lazy_cache_aux_mempool_uninit(void) {
-	struct aux_mempool *aux = &cache_controller.aux_mempool;
-	for (uint16_t i = 0; i < aux->count; i++) {
-		struct cache_mempool *p = &aux->slots[i];
-		if (p->release)
-			p->release(p->area);
-	}
-	aux->count = 0;
-	aux->avalible_idx = 0;
+	struct aux_mempool* aux = &cache_controller.aux_mempool;
 
-	/*
-	 * The cache controller will be reset when aux memory pool
-	 * is be free
-	 */
-	lazy_cache_invalid();
+	if (aux->count > 0) {
+		uint16_t i = 0;
+		do {
+			struct cache_mempool* p = &aux->slots[i];
+			if (p->release) {
+				p->release(p->area);
+				memset(p, 0, sizeof(*p));
+				continue;
+			}
+			rte_assert(0);
+		} while (++i < aux->count);
+
+		aux->count = 0;
+		aux->avalible_idx = 0;
+		cache_controller.aux_count--;
+
+		/*
+		 * The cache controller will be reset when aux memory pool
+		 * is be free
+		 */
+		lazy_cache_invalid();
+	}
 }
 #endif /* CONFIG_LVGL_LAZYDECOMP_AUXMEM */
 

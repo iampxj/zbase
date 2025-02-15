@@ -1,0 +1,146 @@
+
+menuconfig FILE_SYSTEM_FILEXFS
+    bool "FileX filesystem"
+    default n
+
+if FILE_SYSTEM_FILEXFS
+
+config FS_FILEX_NUM_DIRS
+    int "The maximum number of directories"
+    default 3
+
+config FS_FILEX_NUM_FILES
+    int "The maximum number of files"
+    default 3
+
+config FS_FILEX_MEDIA_BUFFER_SIZE
+    int "The cache size for filesystem"
+    default 4096
+
+config FX_MAX_LONG_NAME_LEN
+    int "The maximum size of long file names"
+    range 13 256
+    default 256
+
+config FX_MAX_LAST_NAME_LEN
+    int "The maximum size of long file names"
+    range 13 256
+    default 256
+    help
+        Must be as large or larger than FX_MAX_LONG_NAME_LEN
+
+config FX_MAX_SECTOR_CACHE
+    int "The maximum number of logical sectors that can be cached by FileX"
+    range 2 4294967296
+    default 256
+    help
+        Minimum value is 2, all other values must be power of 2.
+
+config FX_FAT_MAP_SIZE
+    int "The size in bytes of the bit map used to update the secondary FAT sectors"
+    default 128
+    help
+        The larger the value the less unnecessary secondary FAT sector writes.
+
+config FX_MAX_FAT_CACHE
+    int "The number of entries in the FAT cache"
+    default 16
+    help
+        Minimum value is 8, all values must be a power of 2.
+
+config FX_UPDATE_RATE_IN_SECONDS
+    int "The number of seconds the time parameters are updated in FileX"
+    default 10
+
+config FX_NO_TIMER
+    bool "Disable timer for FileX to update time"
+    default n
+
+config FX_DONT_UPDATE_OPEN_FILES
+    bool "FileX does not update already opened files"
+    default n
+
+config FX_MEDIA_DISABLE_SEARCH_CACHE
+    bool "the file search cache optimization is disabled"
+    default n
+
+config FX_DISABLE_DIRECT_DATA_READ_CACHE_FILL
+    bool "The direct read sector update of cache is disabled"
+    default n
+
+config FX_MEDIA_STATISTICS_DISABLE
+    bool "Gathering of media statistics is disabled"
+    default y
+
+config FX_SINGLE_OPEN_LEGACY
+    bool "Legacy single open logic for the same file is enabled"
+    default n
+
+config FX_RENAME_PATH_INHERIT
+    bool "Renaming inherits path information"
+    default n
+
+config FX_NO_LOCAL_PATH
+    bool "Local path logic is disabled"
+    default y
+
+config FX_SINGLE_THREAD
+    bool "Enable single thread model"
+    default n
+
+config FX_FAULT_TOLERANT_DATA
+    bool "Data sector write requests are flushed immediately to the driver"
+    default n
+
+config FX_FAULT_TOLERANT
+    bool "System sector write requests are flushed immediately to the driver"
+    default n
+    help
+        system sector write requests (including FAT and directory entry requests)
+        are flushed immediately to the driver
+
+config FX_DRIVER_USE_64BIT_LBA
+    bool "Enables 64-bits sector addresses used in I/O driver"
+    default n
+
+config FX_ENABLE_FAULT_TOLERANT
+    bool "Enables FileX fault tolerant service"
+    default n
+
+config FX_DISABLE_ERROR_CHECKING
+    bool "Error checking is disabled"
+    default y
+
+config FX_DISABLE_CACHE
+    bool "Cache is disabled"
+    default n
+
+config FX_DISABLE_FILE_CLOSE
+    bool "File close is disabled"
+    default n
+
+config FX_DISABLE_FAST_OPEN
+    bool "Fast open is disabled"
+    default n
+
+config FX_DISABLE_FORCE_MEMORY_OPERATION
+    bool "Force memory operations are disabled"
+    default n
+
+config FX_DISABLE_BUILD_OPTIONS
+    bool "Build options is disabled"
+    default n
+
+config FX_DISABLE_ONE_LINE_FUNCTION
+    bool "One line function is disabled"
+    default n
+
+config FX_DIABLE_FAT_ENTRY_REFRESH
+    bool "FAT entry refresh is disabled"
+    default n
+
+config FX_DISABLE_CONSECUTIVE_DETECT
+    bool "Consecutive detect is disabled"
+    default y
+
+endif #FILE_SYSTEM_FILEXFS
