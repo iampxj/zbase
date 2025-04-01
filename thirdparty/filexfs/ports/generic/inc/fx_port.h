@@ -118,6 +118,9 @@ typedef unsigned long long                      ULONG64;
 #define FX_PREEMPT_DISABLE              k_sched_lock();
 #define FX_PREEMPT_RESTORE              k_sched_unlock();
 
+#define FX_LOCAL_PATH_SETUP
+#define _tx_thread_current_ptr          k_current_get()
+
 #ifndef FX_NO_TIMER
 #define FX_TIMER                        struct k_timer
 #define FX_TIMER_CREATE  \
@@ -181,11 +184,13 @@ typedef struct FX_LOGDEVICE {
     ULONG part_size;
     UINT  number_of_fats;
     UINT  directory_entries;
+    void *media_buffer;
+    UINT  media_buffer_size;
 } FX_LOGDEVICE;
 
 #define FX_MEDIA_MODULE_EXTENSION \
     VOID *fx_media_device_; \
     ULONG fx_media_sector_base_; \
-    ULONG fx_media_sector_num_; \
+    ULONG fx_media_sector_num_;
 
 #endif /* FX_PORT_H */

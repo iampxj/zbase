@@ -1,9 +1,15 @@
 
 zephyr_include_directories(.)
 
+zephyr_library_named(basework_os)
+
 if (${CONFIG_ARCH} STREQUAL "arm")
 zephyr_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../arch/arm)
 endif()
+
+if (CONFIG_FILE_SYSTEM_LITTLEFS)
+    zephyr_library_link_libraries(LITTLEFS)
+endif() 
 
 if (NOT CONFIG_BOOTLOADER)
 zephyr_library_sources(
@@ -25,6 +31,9 @@ zephyr_library_sources_ifdef(CONFIG_BCACHE
 )
 zephyr_library_sources_ifdef(CONFIG_GPT_UPDATE
     os_gpt_param.c
+)
+zephyr_library_sources_ifdef(CONFIG_FILE_SYSTEM_FILEXFS
+    os_fsmount.c
 )
 zephyr_library_sources_ifdef(CONFIG_PTFS           os_ptfs_impl.c os_ptfs.c)
 zephyr_library_sources_ifdef(CONFIG_XIPFS          os_xipfs_impl.c)

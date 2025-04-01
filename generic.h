@@ -4,9 +4,7 @@
 #ifndef BASE_GENERIC_H_
 #define BASE_GENERIC_H_
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
+#include "basework/types.h"
 
 #ifdef CONFIG_HEADER_FILE
 #include CONFIG_HEADER_FILE

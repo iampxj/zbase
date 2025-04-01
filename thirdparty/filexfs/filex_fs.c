@@ -25,10 +25,6 @@
 #define CONFIG_FS_FILEX_NUM_FILES 3
 #endif
 
-#ifndef CONFIG_FS_FILEX_MEDIA_BUFFER_SIZE
-#define CONFIG_FS_FILEX_MEDIA_BUFFER_SIZE 4096
-#endif
-
 #ifndef CONFIG_FS_FILEX_NUM
 #define CONFIG_FS_FILEX_NUM 3
 #endif
@@ -57,8 +53,6 @@ K_MEM_SLAB_DEFINE(filexfs_dirp_pool, sizeof(struct dir_private),
 /* Memory pool for FatFs file objects */
 K_MEM_SLAB_DEFINE(filexfs_filep_pool, sizeof(FX_FILE),
 			CONFIG_FS_FILEX_NUM_FILES, 4);
-
-static char media_buffer[CONFIG_FS_FILEX_MEDIA_BUFFER_SIZE] __aligned(32);
 
 extern UINT _fx_partition_offset_calculate(void  *partition_sector, UINT partition,
                                      ULONG *partition_start, ULONG *partition_size);
@@ -128,6 +122,9 @@ static void filex_io_request(FX_MEDIA *media_ptr) {
 		break;
 
 	case FX_DRIVER_ABORT:
+        media_ptr->fx_media_driver_status = FX_SUCCESS;
+        break;
+
 	case FX_DRIVER_INIT:
 	case FX_DRIVER_UNINIT:
 		media_ptr->fx_media_driver_status = FX_SUCCESS;
@@ -279,7 +276,7 @@ static int filex_seek(struct fs_file_t *zfp, off_t offset, int whence) {
         if (offset >= 0)
             err = fx_file_relative_seek(zfp->filep, offset, FX_SEEK_FORWARD);
         else
-            err = fx_file_relative_seek(zfp->filep, -offset, FX_SEEK_BACK);
+            err = fx_file_relative_seek(zfp->filep, offset, FX_SEEK_BACK);
         break;
     case FS_SEEK_END:
         err = fx_file_relative_seek(zfp->filep, offset, FX_SEEK_END);
@@ -304,11 +301,8 @@ static int filex_truncate(struct fs_file_t *zfp, off_t length) {
 }
 
 static int filex_sync(struct fs_file_t *zfp) {
-    const struct fs_mount_t *fs = zfp->mp;
-    UINT err;
-
-    err = fx_media_flush(fs->fs_data);
-    return FX_ERR(err);
+    (VOID) zfp;
+    return 0;
 }
 
 static int filex_mkdir(struct fs_mount_t *mountp, const char *path) {
@@ -456,7 +450,7 @@ static int filex_mount(struct fs_mount_t *mountp) {
     size_t layout_size;
     UINT  err;
 
-    if (!ldev || !ldev->name || ldev->part_offset == 0)
+    if (!ldev || !ldev->name || ldev->part_size == 0)
         return -EINVAL;
 
     dev = device_get_binding(ldev->name);
@@ -477,32 +471,38 @@ static int filex_mount(struct fs_mount_t *mountp) {
     media_ptr->fx_media_sector_base_ = ldev->part_offset / layout->pages_size;
     media_ptr->fx_media_sector_num_  = ldev->part_size / layout->pages_size;
     media_ptr->fx_media_bytes_per_sector = layout->pages_size;
-
-    printk("@%s: sector_base(%d) sector_num(%d)\n", 
-        __func__, 
+    printk("@%s: fs(%p) media(%p) buffer(%p) bufsz(%d) dev(%p) sector_base(%d) sector_num(%d)\n", 
+        __func__,
+        fs,
+        media_ptr,
+        ldev->media_buffer,
+        ldev->media_buffer_size,
+        media_ptr->fx_media_device_,
         (int)media_ptr->fx_media_sector_base_, 
         (int)media_ptr->fx_media_sector_num_
     );
+
     err = fx_media_open(media_ptr, (CHAR *)dev->name, filex_io_request, 
-        (VOID *)dev, media_buffer, sizeof(media_buffer));
+        (VOID *)dev, ldev->media_buffer, ldev->media_buffer_size);
+
     if (err == FX_MEDIA_INVALID || err == FX_BOOT_ERROR) {
         err = fx_media_format(media_ptr,               // Media instance
                         filex_io_request,              // Driver entry
                         (VOID *)dev,          // Device driver handle
-                        (UCHAR *)media_buffer,     // Media buffer pointer
-                        sizeof(media_buffer),     // Media buffer size
+                        ldev->media_buffer,     // Media buffer pointer
+                        ldev->media_buffer_size,     // Media buffer size
                         "FileX",                  // Volume Name
                         1,                     // Number of FATs
                         32,                 // Directory Entries
                         0,                     // Hidden sectors
                         media_ptr->fx_media_sector_num_,    // Total sectors
                         layout->pages_size,  // Sector size
-                        32,               // Sectors per cluster
+                        8,               // Sectors per cluster
                         1,                              // Heads
                         1);                 // Sectors per track
         if (err == FX_SUCCESS) {
             err = fx_media_open(media_ptr, (CHAR *)dev->name, filex_io_request, 
-                (VOID *)dev, media_buffer, sizeof(media_buffer));
+                (VOID *)dev, ldev->media_buffer, ldev->media_buffer_size);
             if (err == 0)
                 err = fx_media_flush(media_ptr);
         }
