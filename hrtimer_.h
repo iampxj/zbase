@@ -36,17 +36,17 @@ struct hrtimer {
 #endif
 };
 
-static inline enum hrtimer_state 
+static __rte_always_inline enum hrtimer_state 
 _hrtimer_get_state(const struct hrtimer *timer) {
 	return (enum hrtimer_state)RB_COLOR(&timer->node, Node);
 }
 
-static inline void 
+static __rte_always_inline void 
 _hrtimer_set_state(struct hrtimer *timer, enum hrtimer_state state) {
 	RB_COLOR(&timer->node, Node) = state;
 }
 
-static inline bool 
+static __rte_always_inline bool 
 _hrtimer_pending(const struct hrtimer *timer) {
 	return _hrtimer_get_state(timer) < HRTIMER_INACTIVE;
 }
@@ -63,12 +63,12 @@ struct hrtimer_context {
 };
 
 
-static inline struct hrtimer *
+static __rte_always_inline struct hrtimer *
 _hrtimer_first(const struct hrtimer_context *header) {
 	return (struct hrtimer *)header->first;
 }
 
-static inline void 
+static __rte_always_inline void 
 _hrtimer_next_first(struct hrtimer_context *header,
 	const struct hrtimer *first) {
 	RBTree_Node *right;
@@ -86,7 +86,8 @@ _hrtimer_next_first(struct hrtimer_context *header,
 	}
 }
 
-int _hrtimer_insert(struct hrtimer_context *header, struct hrtimer *timer,
+static __rte_always_inline int
+_hrtimer_insert(struct hrtimer_context *header, struct hrtimer *timer,
 	uint64_t expire) {
 	RBTree_Node **link;
 	RBTree_Node *parent;
@@ -120,7 +121,8 @@ int _hrtimer_insert(struct hrtimer_context *header, struct hrtimer *timer,
 	return new_first == &timer->node;
 }
 
-int _hrtimer_remove(struct hrtimer_context *header, struct hrtimer *timer) {
+static __rte_always_inline int
+_hrtimer_remove(struct hrtimer_context *header, struct hrtimer *timer) {
 	if (_hrtimer_pending(timer)) {
 		if (header->first == &timer->node) {
 			_hrtimer_next_first(header, timer);

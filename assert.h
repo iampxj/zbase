@@ -9,8 +9,6 @@
 #include CONFIG_HEADER_FILE
 #endif
 
-#include "basework/log.h"
-
 #ifdef __cplusplus
 extern "C"{
 #endif

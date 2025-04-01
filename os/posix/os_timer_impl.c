@@ -19,6 +19,9 @@
 #include "basework/log.h"
 #include "basework/rq.h"
 
+#ifndef CONFIG_OS_MAX_TIMERS
+#define CONFIG_OS_MAX_TIMERS 3
+#endif
 
 struct os_timer {
     struct sigevent sig;
