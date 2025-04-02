@@ -26,11 +26,12 @@ extern "C"{
  *   generic_fs_mount(FS_FILEXFS, "/usr", "dev@id=50 rawbufsz=8192");
  *   generic_fs_mount(FS_FILEXFS, "/usr", "dev@name=partition rawbufsz=8192");
  *   generic_fs_mount(FS_FILEXFS, "/usr", 
- *      "dev@name=spi_flash rawbufsz=8192 offset=0x500000 capacity=0x200000");
+ *      "dev@name=%s rawbufsz=8192 offset=0x%x capacity=0x%x", "spi_name", offset, capacity);
  *
  */
 int generic_fs_mount(int type, const char *mnt_point, const char *dev_opt, ...)
     __attribute__((format(printf, 3, 4)));
+    
 int generic_fs_unmount(const char *mnt_point);
 int generic_fs_flush(const char *mnt_point);
 

@@ -131,6 +131,7 @@ struct file_class {
 
 	/* filesystem operations */
 	int     (*fssync)(os_filesystem_t fs);
+	int     (*fssync2)(os_filesystem_t fs, const char *mount);
 	int     (*mkdir)(os_filesystem_t fs, const char *pathname);
 	int     (*unlink)(os_filesystem_t fs, const char *pathname);
 	int     (*stat)(os_filesystem_t fs, const char *filename, struct vfs_stat *buf);
@@ -367,6 +368,14 @@ int vfs_dir_foreach(const char *path, bool (*iterator)(struct vfs_dirent *dirent
  * return 0 if success
  */
 int vfs_sync(void);
+
+/*
+ * vfs_sync_cache - Flush filesystem cache to disk
+ *
+ * @mnt_point: mount point
+ * return 0 if success
+ */
+int vfs_sync_cache(const char *mnt_point);
 
 /*
  * vfs_reset - Reset filesystem data

@@ -299,6 +299,23 @@ int vfs_sync(void) {
 	return err;
 }
 
+int vfs_sync_cache(const char *mnt_point) {
+	struct file_class *vfs;
+
+	if (mnt_point == NULL)
+		return -EINVAL;
+
+	STAILQ_FOREACH(vfs, &vfs_head, link) {
+		if (vfs->fssync2)
+			return vfs->fssync2(vfs->fs_priv, mnt_point);
+
+		if (vfs->fssync)
+			return vfs->fssync(vfs->fs_priv);
+	}
+
+	return -ENOSYS;
+}
+
 int vfs_dir_foreach(const char *path, 
 	bool (*iterator)(struct vfs_dirent *dirent, void *),
 	void *arg) {

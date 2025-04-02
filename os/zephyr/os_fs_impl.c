@@ -24,6 +24,7 @@
 #include "basework/os/osapi_obj.h"
 #include "basework/log.h"
 #include "basework/malloc.h"
+#include "generic_fs.h"
 
 struct file {
 	struct vfs_file super;
@@ -188,6 +189,11 @@ static int zephyr_fs_sync(os_filesystem_t fs) {
 #endif
 }
 
+static int zephyr_fs_fssync2(os_filesystem_t fs, const char *mnt_point) {
+    (void) fs;
+    return generic_fs_flush(mnt_point);
+}
+
 static struct file os_files[CONFIG_OS_MAX_FILES];
 static struct file_class zephyr_file_class = {
 	.mntpoint    = NULL,
@@ -208,6 +214,7 @@ static struct file_class zephyr_file_class = {
     .readdir = zephyr_fs_readir,
     .closedir = zephyr_fs_closedir,
     .fssync = zephyr_fs_sync,
+    .fssync2 = zephyr_fs_fssync2,
     .mkdir = zephyr_fs_mkdir,
     .unlink = zephyr_fs_unlink,
     .stat = zephyr_fs_stat,
